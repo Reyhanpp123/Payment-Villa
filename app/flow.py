@@ -24,6 +24,7 @@ from app.rules import (
 
 USER_SESI = ContextVar("user_sesi", default=None)
 DB_SESI = ContextVar("db_sesi", default=None)
+FORK_PESAN = ContextVar("fork_pesan", default=False)
 
 
 def nama_perintah(teks):
@@ -41,12 +42,21 @@ def chat_grup(message):
     return message.get("chat", {}).get("type") in ("group", "supergroup")
 
 
+def id_sama(kiri, kanan):
+
+    try:
+        return int(kiri) == int(kanan)
+    except (TypeError, ValueError):
+        return False
+
+
 async def tampilkan(tg, message, teks, reply_markup=None, db=None, user_id=None):
 
-    # Pesan foto (QRIS) tidak punya teks untuk diedit,
-    # jadi kirim pesan baru.
+    # Pesan foto tidak bisa diedit jadi teks.
+    # Pesan orang lain di grup juga tidak boleh diedit,
+    # jadi balasannya dikirim sebagai pesan baru.
 
-    if message.get("photo"):
+    if message.get("photo") or FORK_PESAN.get():
 
         pesan = await tg.send_message(
             message["chat"]["id"],
@@ -191,10 +201,12 @@ async def handle_update(update, db, tg):
 
     token_user = USER_SESI.set(user_id)
     token_db = DB_SESI.set(db)
+    token_fork = FORK_PESAN.set(False)
 
     try:
         await _handle_update(update, db, tg)
     finally:
+        FORK_PESAN.reset(token_fork)
         USER_SESI.reset(token_user)
         DB_SESI.reset(token_db)
 
@@ -331,21 +343,14 @@ async def handle_callback(query, db, tg):
 
         return
 
-    # Di grup, tiap orang punya pesan menu sendiri.
-    # Tombol di pesan orang lain tidak boleh mengubah layar itu.
+    # Di grup, jangan ubah pesan yang bukan layar orang ini.
+    # Tombolnya tetap dijalankan, hasilnya dikirim sebagai pesan baru.
     if chat_grup(message) and user_id:
 
         sesi = await db.get_sesi(message["chat"]["id"], user_id)
 
-        if not sesi or sesi.get("message_id") != message["message_id"]:
-
-            await tg.answer(
-                query["id"],
-                "Tombol ini milik sesi orang lain. Kirim /start untuk membuka sesi kamu.",
-                show_alert=True,
-            )
-
-            return
+        if not sesi or not id_sama(sesi.get("message_id"), message["message_id"]):
+            FORK_PESAN.set(True)
 
     if (
         data.startswith("lunas|")
@@ -399,11 +404,7 @@ async def handle_callback(query, db, tg):
         await tampilkan(
             tg,
             message,
-            """
-🏡 VILLA 360
-
-Pilih menu:
-""",
+            teks_mulai(),
             menu(),
         )
 
@@ -454,7 +455,9 @@ Pilih menu:
         await tampilkan(tg, message, "⏳ Membuat QRIS baru...")
 
         try:
-            qris = await generate_qris(db, nama, bulan)
+            trxid = await db.trxid_berikutnya(nama, bulan)
+            qris = await generate_qris(db, nama, bulan, trxid)
+            await db.ganti_pending_lain(nama, bulan, trxid)
         except Exception as e:
             await tampilkan(
                 tg,
@@ -632,6 +635,75 @@ Pilih bulan:
     )
 
 
+async def tampilkan_qr_tersimpan(db, tg, message, row):
+
+    # Gambar QR tidak disimpan di database.
+    # Yang ada hanya pesan foto lama, jadi disalin ulang ke chat.
+
+    if not row or not row.get("message_id") or not row.get("chat_id"):
+        return False
+
+    caption = f"""
+💳 TRANSAKSI MASIH MENUNGGU
+
+👤 Nama:
+{row["nama"]}
+
+📅 Bulan:
+{row["bulan"]}
+
+💰 Nominal:
+{rupiah(row["nominal"])}
+
+🆔 ID Transaksi:
+{row["transaction_id"]}
+
+🔖 TRXID:
+{row["trxid"]}
+
+🕐 Dibuat:
+{row["created_at"]}
+
+⏳ Status:
+MENUNGGU PEMBAYARAN
+
+Silakan scan QRIS di atas.
+"""
+
+    try:
+
+        hasil = await tg.copy_message(
+            message["chat"]["id"],
+            row["chat_id"],
+            row["message_id"],
+            caption,
+            papan(
+                tombol_transaksi(row["trxid"])
+                + [[tombol(
+                    "🔄 Buat QR Baru",
+                    f"buatqr|{row['nama']}|{row['bulan']}",
+                )]]
+                + [[tombol("⬅️ Kembali", "bayar")]]
+            ),
+            reply_to=message["message_id"],
+        )
+
+    except RuntimeError:
+        return False
+
+    user_id = USER_SESI.get()
+    message_id = hasil.get("message_id") if isinstance(hasil, dict) else None
+
+    if user_id and message_id:
+        await db.simpan_sesi(
+            message["chat"]["id"],
+            user_id,
+            message_id,
+        )
+
+    return True
+
+
 async def lanjut_bayar(db, tg, message, nama, bulan):
 
     if await db.sudah_lunas(nama, bulan):
@@ -664,6 +736,10 @@ LUNAS ✅
     if pending:
 
         trxid = pending["trxid"]
+        row = await db.get_qris(trxid)
+
+        if await tampilkan_qr_tersimpan(db, tg, message, row):
+            return
 
         await tampilkan(
             tg,
@@ -765,6 +841,16 @@ async def cek_pembayaran(db, tg, query, message, nama_sendiri):
 
         return
 
+    if transaksi["status"] not in ("PENDING", "SUCCESS"):
+
+        await tg.answer(
+            query["id"],
+            "QR ini sudah diganti. Buat QR baru.",
+            show_alert=True,
+        )
+
+        return
+
     if transaksi["status"] == "SUCCESS":
 
         await tg.answer(
@@ -782,6 +868,9 @@ async def cek_pembayaran(db, tg, query, message, nama_sendiri):
         "⏳ Pembayaran belum diterima",
         show_alert=True,
     )
+
+    if not message.get("photo"):
+        await tampilkan_qr_tersimpan(db, tg, message, transaksi)
 
 
 def teks_rekap(baris_pembayaran):

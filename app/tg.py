@@ -130,6 +130,31 @@ class Telegram:
 
         return hasil["result"]
 
+    async def copy_message(
+        self,
+        chat_id,
+        from_chat_id,
+        message_id,
+        caption,
+        reply_markup=None,
+        reply_to=None,
+    ):
+
+        payload = {
+            "chat_id": chat_id,
+            "from_chat_id": from_chat_id,
+            "message_id": message_id,
+            "caption": caption,
+        }
+
+        if reply_to:
+            payload["reply_to_message_id"] = reply_to
+
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+
+        return await self.call("copyMessage", payload)
+
     async def answer(self, callback_id, teks=None, show_alert=False):
 
         payload = {"callback_query_id": callback_id}

@@ -116,7 +116,7 @@ def bulan_berjalan(saat=None):
 def buat_trxid(nama, bulan):
 
     # Format provider: 202610BENOY
-    # (tahun + bulan iuran + nama), satu trxid per anggota per bulan
+    # (tahun + bulan iuran + nama)
 
     tahun, nomor_bulan = PERIODE[bulan]
 
@@ -128,6 +128,22 @@ def buat_trxid(nama, bulan):
     )
 
     return f"{tahun}{nomor_bulan:02d}" + nama_bersih
+
+
+def trxid_selanjutnya(dasar, dipakai):
+
+    # QR baru tidak boleh memakai trxid yang sudah ada.
+    # 202610REYHAN, lalu 202610REYHAN2, 202610REYHAN3, ...
+
+    if dasar not in dipakai:
+        return dasar
+
+    nomor = 2
+
+    while f"{dasar}{nomor}" in dipakai:
+        nomor += 1
+
+    return f"{dasar}{nomor}"
 
 
 def tombol(teks, data):

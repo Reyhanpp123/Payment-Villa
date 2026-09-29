@@ -1,6 +1,6 @@
 import httpx
 
-from app.rules import sekarang
+from app.rules import buat_trxid, sekarang, trxid_selanjutnya
 
 
 class Store:
@@ -104,6 +104,40 @@ class Store:
 
         return baris[0] if baris else None
 
+    async def trxid_berikutnya(self, nama, bulan):
+
+        dasar = buat_trxid(nama, bulan)
+
+        baris = await self._get(
+            "qris_transactions",
+            {
+                "select": "trxid",
+                "nama": f"eq.{nama}",
+                "bulan": f"eq.{bulan}",
+            },
+        )
+
+        return trxid_selanjutnya(
+            dasar,
+            {item["trxid"] for item in baris},
+        )
+
+    async def ganti_pending_lain(self, nama, bulan, trxid_baru):
+
+        # QR lama tidak lagi yang berlaku, supaya pembayaran Rp1
+        # yang sudah terbit tidak ikut tercatat lunas.
+
+        await self._patch(
+            "qris_transactions",
+            {
+                "nama": f"eq.{nama}",
+                "bulan": f"eq.{bulan}",
+                "status": "eq.PENDING",
+                "trxid": f"neq.{trxid_baru}",
+            },
+            {"status": "DIGANTI"},
+        )
+
     async def simpan_pending(self, trxid, transaction_id, nama, bulan, nominal):
 
         # trxid sama untuk anggota+bulan yang sama, jadi QR baru
@@ -153,6 +187,9 @@ class Store:
 
         if transaksi["status"] == "SUCCESS":
             return True, "SUDAH LUNAS"
+
+        if transaksi["status"] != "PENDING":
+            return False, "TRANSAKSI TIDAK MENUNGGU"
 
         sudah = await self.sudah_lunas(
             transaksi["nama"],

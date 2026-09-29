@@ -5,9 +5,10 @@ import httpx
 from app.rules import IURAN, PERIODE, QRIS_URL, buat_trxid, rupiah, sekarang
 
 
-async def generate_qris(db, nama, bulan):
+async def generate_qris(db, nama, bulan, trxid=None):
 
-    trxid = buat_trxid(nama, bulan)
+    if not trxid:
+        trxid = buat_trxid(nama, bulan)
 
     payload = {
         "judul": f"Payment {nama} V360",
