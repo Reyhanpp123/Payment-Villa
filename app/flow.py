@@ -575,7 +575,7 @@ async def handle_callback(query, db, tg):
         try:
             trxid = await db.trxid_berikutnya(nama, bulan)
             qris = await generate_qris(db, nama, bulan, trxid)
-            await db.ganti_pending_lain(nama, bulan, trxid)
+            await db.ganti_pending_lain(nama, bulan, qris["trxid"])
         except Exception as e:
             await tampilkan(
                 tg,

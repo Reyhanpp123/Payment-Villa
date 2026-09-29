@@ -9,13 +9,40 @@ from app.rules import (
     buat_trxid,
     sekarang,
     teks_transaksi,
+    trxid_selanjutnya,
 )
 
 
 async def generate_qris(db, nama, bulan, trxid=None):
 
-    if not trxid:
-        trxid = buat_trxid(nama, bulan)
+    # Provider menolak trxid yang pernah dipakai, meski sudah
+    # dihapus dari database lokal (misalnya setelah reset).
+    # Kalau gagal, coba trxid berikutnya sampai diterima.
+
+    dasar = buat_trxid(nama, bulan)
+    dipakai = set()
+    kandidat = trxid or dasar
+    terakhir = None
+
+    for _ in range(20):
+
+        try:
+            return await _buat_qris(db, nama, bulan, kandidat)
+        except RuntimeError as e:
+
+            if "generating qr content" not in str(e).lower():
+                raise
+
+            terakhir = e
+            dipakai.add(kandidat)
+            kandidat = trxid_selanjutnya(dasar, dipakai)
+
+            print("QRIS TRXID DITOLAK, COBA:", kandidat)
+
+    raise terakhir or RuntimeError("QRIS gagal dibuat")
+
+
+async def _buat_qris(db, nama, bulan, trxid):
 
     payload = {
         "judul": f"Payment {nama} V360",
