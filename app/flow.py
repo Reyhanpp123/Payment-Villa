@@ -16,6 +16,7 @@ from app.rules import (
     teks_berhasil,
     teks_mulai,
     teks_progress,
+    teks_transaksi,
     tombol,
     tombol_kembali,
     tombol_transaksi,
@@ -24,7 +25,6 @@ from app.rules import (
 
 USER_SESI = ContextVar("user_sesi", default=None)
 DB_SESI = ContextVar("db_sesi", default=None)
-FORK_PESAN = ContextVar("fork_pesan", default=False)
 
 
 def nama_perintah(teks):
@@ -52,11 +52,10 @@ def id_sama(kiri, kanan):
 
 async def tampilkan(tg, message, teks, reply_markup=None, db=None, user_id=None):
 
-    # Pesan foto tidak bisa diedit jadi teks.
-    # Pesan orang lain di grup juga tidak boleh diedit,
+    # Pesan foto tidak bisa diedit jadi teks,
     # jadi balasannya dikirim sebagai pesan baru.
 
-    if message.get("photo") or FORK_PESAN.get():
+    if message.get("photo"):
 
         pesan = await tg.send_message(
             message["chat"]["id"],
@@ -201,12 +200,10 @@ async def handle_update(update, db, tg):
 
     token_user = USER_SESI.set(user_id)
     token_db = DB_SESI.set(db)
-    token_fork = FORK_PESAN.set(False)
 
     try:
         await _handle_update(update, db, tg)
     finally:
-        FORK_PESAN.reset(token_fork)
         USER_SESI.reset(token_user)
         DB_SESI.reset(token_db)
 
@@ -272,14 +269,11 @@ async def _handle_update(update, db, tg):
 
         await tg.send_message(
             message["chat"]["id"],
-            """
-✅ Pengingat iuran akan dikirim ke grup ini.
-
-Tiap tanggal 1, pagi WIB, untuk anggota yang belum bayar.
-Kalau pengiriman gagal, dicoba lagi hari berikutnya.
-
-Tombol pada pesan itu mematikan sisa pengingat bulan berjalan.
-""",
+            (
+                "✅ Pengingat iuran dikirim ke grup ini tiap tanggal 1 pagi, "
+                "untuk yang belum bayar. Tombol pada pesan itu mematikan "
+                "pengingat bulan berjalan."
+            ),
             reply_to=message["message_id"],
         )
 
@@ -296,12 +290,7 @@ Tombol pada pesan itu mematikan sisa pengingat bulan berjalan.
 
         await tg.send_message(
             message["chat"]["id"],
-            """
-✅ RESET BERHASIL
-
-Semua pembayaran dan transaksi QRIS
-sudah dikosongkan.
-""",
+            "✅ Reset berhasil. Pembayaran dan transaksi QRIS dikosongkan.",
             reply_to=message["message_id"],
         )
 
@@ -343,14 +332,20 @@ async def handle_callback(query, db, tg):
 
         return
 
-    # Di grup, jangan ubah pesan yang bukan layar orang ini.
-    # Tombolnya tetap dijalankan, hasilnya dikirim sebagai pesan baru.
+    # Di grup, tombol hanya melanjutkan sesi orang yang punya pesan itu.
     if chat_grup(message) and user_id:
 
         sesi = await db.get_sesi(message["chat"]["id"], user_id)
 
         if not sesi or not id_sama(sesi.get("message_id"), message["message_id"]):
-            FORK_PESAN.set(True)
+
+            await tg.answer(
+                query["id"],
+                "Tombol ini bukan sesi kamu. Kirim /start untuk membuka sesi sendiri.",
+                show_alert=True,
+            )
+
+            return
 
     if (
         data.startswith("lunas|")
@@ -476,29 +471,16 @@ async def handle_callback(query, db, tg):
             tg,
             message,
             qris,
-            f"""
-💳 QRIS BARU
-
-👤 Nama:
-{nama}
-
-📅 Bulan:
-{bulan}
-
-💰 Nominal:
-{rupiah(qris["amount"])}
-
-🆔 ID Transaksi:
-{qris["transaction_id"]}
-
-🔖 TRXID:
-{qris["trxid"]}
-
-🕐 Dibuat:
-{qris["created_at"]}
-
-⏳ MENUNGGU PEMBAYARAN
-""",
+            teks_transaksi(
+                "💳 QRIS BARU",
+                nama,
+                bulan,
+                qris["amount"],
+                qris["trxid"],
+                qris["transaction_id"],
+                qris["created_at"],
+                "menunggu",
+            ),
         )
 
         return
@@ -561,15 +543,11 @@ async def handle_callback(query, db, tg):
         await tampilkan(
             tg,
             message,
-            f"""
-💰 TOTAL DANA
-
-{rupiah(total)} / {rupiah(TARGET)}
-
-📈 Progress:
-
-{total / TARGET * 100:.1f}%
-""",
+            (
+                f"💰 DANA\n"
+                f"{rupiah(total)} / {rupiah(TARGET)} "
+                f"({total / TARGET * 100:.1f}%)"
+            ),
             menu(),
         )
 
@@ -623,14 +601,7 @@ async def layar_bulan(tg, message, nama):
     await tampilkan(
         tg,
         message,
-        f"""
-💸 BAYAR IURAN
-
-👤 Nama:
-{nama}
-
-Pilih bulan:
-""",
+        f"💸 BAYAR\n{nama}\nPilih bulan:",
         papan(baris),
     )
 
@@ -643,32 +614,16 @@ async def tampilkan_qr_tersimpan(db, tg, message, row):
     if not row or not row.get("message_id") or not row.get("chat_id"):
         return False
 
-    caption = f"""
-💳 TRANSAKSI MASIH MENUNGGU
-
-👤 Nama:
-{row["nama"]}
-
-📅 Bulan:
-{row["bulan"]}
-
-💰 Nominal:
-{rupiah(row["nominal"])}
-
-🆔 ID Transaksi:
-{row["transaction_id"]}
-
-🔖 TRXID:
-{row["trxid"]}
-
-🕐 Dibuat:
-{row["created_at"]}
-
-⏳ Status:
-MENUNGGU PEMBAYARAN
-
-Silakan scan QRIS di atas.
-"""
+    caption = teks_transaksi(
+        "💳 MENUNGGU",
+        row["nama"],
+        row["bulan"],
+        row["nominal"],
+        row["trxid"],
+        row["transaction_id"],
+        row["created_at"],
+        "menunggu",
+    )
 
     try:
 
@@ -711,21 +666,7 @@ async def lanjut_bayar(db, tg, message, nama, bulan):
         await tampilkan(
             tg,
             message,
-            f"""
-⚠️ SUDAH MELUNASI
-
-👤 Nama:
-{nama}
-
-📅 Bulan:
-{bulan}
-
-💰 Nominal:
-{rupiah(IURAN)}
-
-Status:
-LUNAS ✅
-""",
+            f"✅ {nama} · {bulan} sudah lunas\n{rupiah(IURAN)}",
             menu(),
         )
 
@@ -744,30 +685,16 @@ LUNAS ✅
         await tampilkan(
             tg,
             message,
-            f"""
-💳 TRANSAKSI MASIH MENUNGGU
-
-👤 Nama:
-{nama}
-
-📅 Bulan:
-{bulan}
-
-💰 Nominal:
-{rupiah(pending["nominal"])}
-
-🆔 ID Transaksi:
-{pending["transaction_id"]}
-
-🔖 TRXID:
-{trxid}
-
-🕐 Dibuat:
-{pending["created_at"]}
-
-⏳ Status:
-MENUNGGU PEMBAYARAN
-""",
+            teks_transaksi(
+                "💳 MENUNGGU",
+                nama,
+                bulan,
+                pending["nominal"],
+                trxid,
+                pending["transaction_id"],
+                pending["created_at"],
+                "menunggu",
+            ),
             papan(
                 tombol_transaksi(trxid)
                 + [[tombol(
@@ -877,12 +804,7 @@ def teks_rekap(baris_pembayaran):
 
     jumlah = hitung_per_nama(baris_pembayaran)
 
-    teks = """
-📋 REKAP VILLA 360
-
-━━━━━━━━━━━━━━
-
-"""
+    teks = "📋 REKAP VILLA 360\n\n"
 
     total = 0
 
@@ -892,30 +814,9 @@ def teks_rekap(baris_pembayaran):
         uang = banyak * IURAN
         total += uang
 
-        lunas = "🟩" * banyak
-        belum = "⬜" * (len(BULAN) - banyak)
+        teks += f"{nama:<7} {banyak}/{len(BULAN)}  {rupiah(uang)}\n"
 
-        teks += f"""
-👤 {nama}
-
-{lunas}{belum}
-{banyak}/{len(BULAN)}
-
-💰 {rupiah(uang)}
-
-"""
-
-    teks += f"""
-━━━━━━━━━━━━━━
-
-💵 Total Kas:
-
-{rupiah(total)}
-
-🎯 Target:
-
-{rupiah(TARGET)}
-"""
+    teks += f"\nKas {rupiah(total)} / {rupiah(TARGET)}"
 
     return teks
 
@@ -927,7 +828,7 @@ def teks_tunggakan(baris_pembayaran):
         for baris in baris_pembayaran
     }
 
-    teks = "⚠️ TUNGGAKAN\n\n"
+    teks = "⚠️ TUNGGAKAN\n"
 
     ada = False
 
@@ -943,13 +844,9 @@ def teks_tunggakan(baris_pembayaran):
 
             ada = True
 
-            teks += (
-                f"👤 {nama}\n"
-                + ", ".join(belum)
-                + "\n\n"
-            )
+            teks += f"{nama}: {', '.join(belum)}\n"
 
     if not ada:
-        teks += "🎉 Semua anggota sudah lunas"
+        teks += "Semua anggota sudah lunas"
 
     return teks

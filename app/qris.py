@@ -2,7 +2,14 @@ import base64
 
 import httpx
 
-from app.rules import IURAN, PERIODE, QRIS_URL, buat_trxid, rupiah, sekarang
+from app.rules import (
+    IURAN,
+    PERIODE,
+    QRIS_URL,
+    buat_trxid,
+    sekarang,
+    teks_transaksi,
+)
 
 
 async def generate_qris(db, nama, bulan, trxid=None):
@@ -89,33 +96,13 @@ async def generate_qris(db, nama, bulan, trxid=None):
 
 def caption_qris(nama, bulan, qris, judul):
 
-    return f"""
-{judul}
-
-━━━━━━━━━━━━━━
-
-👤 Nama:
-{nama}
-
-📅 Bulan:
-{bulan}
-
-💰 Nominal:
-{rupiah(qris["amount"])}
-
-🆔 ID Transaksi:
-{qris["transaction_id"]}
-
-🔖 TRXID:
-{qris["trxid"]}
-
-🕐 Waktu:
-{qris["created_at"]}
-
-━━━━━━━━━━━━━━
-
-⏳ Status:
-MENUNGGU PEMBAYARAN
-
-Silakan scan QRIS di atas.
-"""
+    return teks_transaksi(
+        judul,
+        nama,
+        bulan,
+        qris["amount"],
+        qris["trxid"],
+        qris["transaction_id"],
+        qris["created_at"],
+        "menunggu",
+    )

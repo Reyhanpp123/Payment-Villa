@@ -183,67 +183,55 @@ def tombol_transaksi(trxid):
 
 def teks_mulai():
 
-    return f"""
-🏡 VILLA 360
+    return (
+        "🏡 VILLA 360\n"
+        "Tabungan Villa 2027\n"
+        f"Iuran {rupiah(IURAN)} / bulan\n"
+        f"Target {rupiah(TARGET)}\n\n"
+        "Pilih menu:"
+    )
 
-Tabungan Villa 2027
 
-💰 Iuran:
-{rupiah(IURAN)} / bulan
+def teks_transaksi(judul, nama, bulan, nominal, trxid, transaksi_id, waktu, status):
 
-🎯 Target:
-{rupiah(TARGET)}
-
-Silahkan pilih menu:
-"""
+    return (
+        f"{judul}\n"
+        f"{nama} · {bulan}\n"
+        f"{rupiah(nominal)} · {status}\n"
+        f"TRX {trxid}\n"
+        f"ID {transaksi_id}\n"
+        f"{waktu}"
+    )
 
 
 def teks_berhasil(row):
 
-    return f"""
-✅ PEMBAYARAN SELESAI
+    tambahan = " · ".join(
+        bagian
+        for bagian in (row.get("channel"), row.get("refcode"))
+        if bagian
+    )
 
-━━━━━━━━━━━━━━
+    teks = teks_transaksi(
+        "✅ LUNAS",
+        row["nama"],
+        row["bulan"],
+        row["nominal"],
+        row["trxid"],
+        row["transaction_id"],
+        row.get("paid_at") or "-",
+        "selesai",
+    )
 
-👤 Nama:
-{row["nama"]}
+    if tambahan:
+        teks += f"\n{tambahan}"
 
-📅 Bulan:
-{row["bulan"]}
-
-💰 Nominal:
-{rupiah(row["nominal"])}
-
-🆔 ID Transaksi:
-{row["transaction_id"]}
-
-🔖 TRXID:
-{row["trxid"]}
-
-💳 Channel:
-{row.get("channel") or "-"}
-
-🔖 Refcode:
-{row.get("refcode") or "-"}
-
-🕐 Dibayar:
-{row.get("paid_at")}
-
-━━━━━━━━━━━━━━
-
-Status:
-LUNAS ✅
-"""
+    return teks
 
 
 def teks_progress(jumlah_per_nama):
 
-    teks = """
-📊 PROGRESS VILLA 360
-
-━━━━━━━━━━━━━━
-
-"""
+    teks = "📊 PROGRESS\n"
 
     total = 0
 
@@ -260,21 +248,11 @@ def teks_progress(jumlah_per_nama):
             + "░" * (len(BULAN) - jumlah_bar)
         )
 
-        teks += (
-            f"{nama:<7} "
-            f"{bar} "
-            f"{jumlah}/{len(BULAN)}\n"
-        )
+        teks += f"{nama:<7} {bar} {jumlah}/{len(BULAN)}\n"
 
-    teks += f"""
-━━━━━━━━━━━━━━
+    persen = total / TARGET * 100
 
-💰 Dana:
-{rupiah(total)} / {rupiah(TARGET)}
-
-📈 Progress:
-{total / TARGET * 100:.1f}%
-"""
+    teks += f"\nDana {rupiah(total)} / {rupiah(TARGET)} ({persen:.1f}%)"
 
     return teks
 

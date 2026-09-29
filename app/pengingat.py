@@ -23,18 +23,12 @@ def yang_belum_bayar(bulan, baris_pembayaran):
 def teks_pengingat(bulan, belum):
 
     tahun = PERIODE[bulan][0]
-    daftar = "\n".join(f"• {nama}" for nama in belum)
 
-    return f"""
-⚠️ PENGINGAT IURAN
-
-📅 {bulan} {tahun}
-
-Yang belum bayar:
-{daftar}
-
-💰 {rupiah(IURAN)} / orang
-"""
+    return (
+        f"⚠️ PENGINGAT {bulan} {tahun}\n"
+        f"Belum bayar: {', '.join(belum)}\n"
+        f"{rupiah(IURAN)} / orang"
+    )
 
 
 def tombol_skip(bulan):
