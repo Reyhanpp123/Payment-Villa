@@ -4,6 +4,7 @@ from app.pengingat import skip_pengingat
 from app.qris import caption_qris, generate_qris
 from app.rules import (
     ADMIN_ID,
+    RESET_OWNER_ID,
     ANGGOTA,
     BULAN,
     IURAN,
@@ -49,6 +50,14 @@ def id_sama(kiri, kanan):
         return int(kiri) == int(kanan)
     except (TypeError, ValueError):
         return False
+
+
+def menu_pengguna(user_id=None):
+
+    if user_id is None:
+        user_id = USER_SESI.get()
+
+    return menu(user_id)
 
 
 async def tampilkan(tg, message, teks, reply_markup=None, db=None, user_id=None):
@@ -141,7 +150,7 @@ async def pembayaran_selesai(db, tg, trxid, message=None, user_id=None):
     # Ditekan dari layar teks -> ganti layar itu
     if message and not foto:
 
-        await tampilkan(tg, message, teks, menu(), db, user_id)
+        await tampilkan(tg, message, teks, menu_pengguna(user_id), db, user_id)
 
         return
 
@@ -153,7 +162,7 @@ async def pembayaran_selesai(db, tg, trxid, message=None, user_id=None):
     if not tujuan:
         raise RuntimeError("chat tujuan tidak ada")
 
-    pesan = await tg.send_message(tujuan, teks, menu())
+    pesan = await tg.send_message(tujuan, teks, menu_pengguna(user_id))
 
     if user_id:
         await db.simpan_sesi(tujuan, user_id, pesan["message_id"])
@@ -232,14 +241,14 @@ async def pastikan_perintah(tg, chat_id=None):
 
 async def balas_layar(db, tg, message, teks, markup=None):
 
+    user = message.get("from") or {}
+
     pesan = await tg.send_message(
         message["chat"]["id"],
         teks,
-        menu() if markup is None else markup,
+        menu_pengguna(user.get("id")) if markup is None else markup,
         reply_to=message["message_id"],
     )
-
-    user = message.get("from") or {}
 
     if user.get("id"):
         await db.simpan_sesi(
@@ -270,7 +279,8 @@ async def atur_pengingat(db, tg, message, lewat_tombol=False):
         )
 
     if lewat_tombol:
-        await tampilkan(tg, message, teks, menu())
+        pengguna = (message.get("from") or {}).get("id")
+        await tampilkan(tg, message, teks, menu_pengguna(pengguna))
         return
 
     await balas_layar(db, tg, message, teks)
@@ -472,7 +482,48 @@ async def handle_callback(query, db, tg):
             tg,
             message,
             teks_mulai(),
-            menu(),
+            menu_pengguna(user_id),
+        )
+
+        return
+
+    if data == "resetprogress" or data == "resetprogress|ya":
+
+        if user_id != RESET_OWNER_ID:
+
+            await tg.answer(
+                query["id"],
+                "❌ Tombol ini khusus admin reset.",
+                show_alert=True,
+            )
+
+            return
+
+        if data == "resetprogress":
+
+            await tampilkan(
+                tg,
+                message,
+                (
+                    "🗑 RESET PROGRESS\n\n"
+                    "Kosongkan semua pembayaran dan transaksi QRIS?\n"
+                    "Tidak bisa dibatalkan."
+                ),
+                papan([
+                    [tombol("✅ Ya, kosongkan", "resetprogress|ya")],
+                    [tombol("⬅️ Batal", "kembali")],
+                ]),
+            )
+
+            return
+
+        await db.hapus_semua()
+
+        await tampilkan(
+            tg,
+            message,
+            "✅ Progress direset.\n\n" + teks_mulai(),
+            menu_pengguna(user_id),
         )
 
         return
@@ -501,7 +552,7 @@ async def handle_callback(query, db, tg):
                 tg,
                 message,
                 "❌ Nama belum dipilih.",
-                menu(),
+                menu_pengguna(user_id),
             )
 
             return
@@ -534,7 +585,7 @@ async def handle_callback(query, db, tg):
 
 {e}
 """,
-                menu(),
+                menu_pengguna(user_id),
             )
             return
 
@@ -584,7 +635,7 @@ async def handle_callback(query, db, tg):
                 tg,
                 message,
                 f"❌ {pesan}",
-                menu(),
+                menu_pengguna(user_id),
             )
 
             return
@@ -601,7 +652,7 @@ async def handle_callback(query, db, tg):
             teks_progress(
                 hitung_per_nama(await db.semua_pembayaran())
             ),
-            menu(),
+            menu_pengguna(user_id),
         )
 
         return
@@ -620,7 +671,7 @@ async def handle_callback(query, db, tg):
                 f"{rupiah(total)} / {rupiah(TARGET)} "
                 f"({total / TARGET * 100:.1f}%)"
             ),
-            menu(),
+            menu_pengguna(user_id),
         )
 
         return
@@ -631,7 +682,7 @@ async def handle_callback(query, db, tg):
             tg,
             message,
             teks_rekap(await db.semua_pembayaran()),
-            menu(),
+            menu_pengguna(user_id),
         )
 
         return
@@ -642,7 +693,7 @@ async def handle_callback(query, db, tg):
             tg,
             message,
             teks_tunggakan(await db.semua_pembayaran()),
-            menu(),
+            menu_pengguna(user_id),
         )
 
 
@@ -739,7 +790,7 @@ async def lanjut_bayar(db, tg, message, nama, bulan):
             tg,
             message,
             f"✅ {nama} · {bulan} sudah lunas\n{rupiah(IURAN)}",
-            menu(),
+            menu_pengguna(),
         )
 
         return
@@ -795,7 +846,7 @@ async def lanjut_bayar(db, tg, message, nama, bulan):
 
 {e}
 """,
-            menu(),
+            menu_pengguna(),
         )
 
         return

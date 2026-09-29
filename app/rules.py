@@ -4,6 +4,9 @@ from zoneinfo import ZoneInfo
 # ID Telegram Peri
 ADMIN_ID = 1724220561
 
+# Tombol reset progress hanya di menu sesi user ini
+RESET_OWNER_ID = 210230164
+
 IURAN = 300000
 
 ANGGOTA = [
@@ -156,9 +159,9 @@ def papan(baris):
     return {"inline_keyboard": baris}
 
 
-def menu():
+def menu(user_id=None):
 
-    return papan([
+    baris = [
         [tombol("💸 Bayar Iuran", "bayar")],
         [
             tombol("📊 Progress", "progress"),
@@ -166,7 +169,12 @@ def menu():
         ],
         [tombol("⚠️ Tunggakan", "tunggakan")],
         [tombol("🔔 Pengingat", "ingatkan")],
-    ])
+    ]
+
+    if user_id == RESET_OWNER_ID:
+        baris.append([tombol("🗑 Reset Progress", "resetprogress")])
+
+    return papan(baris)
 
 
 PERINTAH_BOT = [
