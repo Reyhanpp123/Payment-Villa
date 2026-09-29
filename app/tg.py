@@ -49,15 +49,28 @@ class Telegram:
 
         return await self.call("sendMessage", payload)
 
-    async def daftarkan_perintah(self, perintah):
+    async def daftarkan_perintah(self, perintah, chat_id=None):
 
         # Daftar ini yang muncul saat "/" ditekan di Telegram.
-        # Grup butuh scope sendiri; default hanya chat pribadi.
+        # Scope default dan admin ikut diisi, karena klien sering
+        # membaca daftar itu lebih dulu daripada daftar semua grup.
+        # chat_id menempelkan daftar yang sama ke satu grup.
 
-        for scope in (
+        scopes = [
+            {"type": "default"},
             {"type": "all_private_chats"},
             {"type": "all_group_chats"},
-        ):
+            {"type": "all_chat_administrators"},
+        ]
+
+        if chat_id is not None:
+            scopes.append({"type": "chat", "chat_id": chat_id})
+            scopes.append({
+                "type": "chat_administrators",
+                "chat_id": chat_id,
+            })
+
+        for scope in scopes:
 
             await self.call(
                 "setMyCommands",

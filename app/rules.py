@@ -241,30 +241,27 @@ def teks_berhasil(row):
 
 def teks_progress(jumlah_per_nama):
 
-    teks = "📊 PROGRESS\n"
+    total_iuran = sum(
+        jumlah_per_nama.get(nama, 0) for nama in ANGGOTA
+    )
 
-    total = 0
+    slot = len(ANGGOTA) * len(BULAN)
+    uang = total_iuran * IURAN
+    persen = uang / TARGET * 100 if TARGET else 0
 
-    for nama in ANGGOTA:
+    if total_iuran == 0:
+        terisi = 0
+    else:
+        terisi = min(10, max(1, round(persen / 10)))
 
-        jumlah = jumlah_per_nama.get(nama, 0)
+    bar = "█" * terisi + "░" * (10 - terisi)
 
-        total += jumlah * IURAN
-
-        jumlah_bar = min(jumlah, len(BULAN))
-
-        bar = (
-            "█" * jumlah_bar
-            + "░" * (len(BULAN) - jumlah_bar)
-        )
-
-        teks += f"{nama:<7} {bar} {jumlah}/{len(BULAN)}\n"
-
-    persen = total / TARGET * 100
-
-    teks += f"\nDana {rupiah(total)} / {rupiah(TARGET)} ({persen:.1f}%)"
-
-    return teks
+    return (
+        "📊 PROGRESS\n"
+        f"{bar} {persen:.1f}%\n"
+        f"{rupiah(uang)} / {rupiah(TARGET)}\n"
+        f"{total_iuran} dari {slot} iuran lunas"
+    )
 
 
 def hitung_per_nama(baris_pembayaran):

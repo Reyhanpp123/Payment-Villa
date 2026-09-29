@@ -193,20 +193,41 @@ async def kirim_qr(db, tg, message, qris, caption, user_id=None):
 
 
 _perintah_siap = False
+_perintah_chat = set()
 
 
-async def pastikan_perintah(tg):
+def chat_id_update(update):
+
+    if "callback_query" in update:
+        message = update["callback_query"].get("message") or {}
+    else:
+        message = update.get("message") or {}
+
+    chat = message.get("chat") or {}
+
+    return chat.get("id")
+
+
+async def pastikan_perintah(tg, chat_id=None):
 
     global _perintah_siap
 
-    if _perintah_siap:
+    if not _perintah_siap:
+
+        try:
+            await tg.daftarkan_perintah(PERINTAH_BOT)
+            _perintah_siap = True
+        except Exception as e:
+            print("GAGAL DAFTAR PERINTAH:", repr(e))
+
+    if chat_id is None or chat_id in _perintah_chat:
         return
 
     try:
-        await tg.daftarkan_perintah(PERINTAH_BOT)
-        _perintah_siap = True
+        await tg.daftarkan_perintah(PERINTAH_BOT, chat_id=chat_id)
+        _perintah_chat.add(chat_id)
     except Exception as e:
-        print("GAGAL DAFTAR PERINTAH:", repr(e))
+        print("GAGAL DAFTAR PERINTAH GRUP:", repr(e))
 
 
 async def balas_layar(db, tg, message, teks, markup=None):
@@ -265,7 +286,7 @@ async def handle_update(update, db, tg):
     token_user = USER_SESI.set(user_id)
     token_db = DB_SESI.set(db)
 
-    await pastikan_perintah(tg)
+    await pastikan_perintah(tg, chat_id_update(update))
 
     try:
         await _handle_update(update, db, tg)
@@ -851,21 +872,80 @@ async def cek_pembayaran(db, tg, query, message, nama_sendiri):
         await tampilkan_qr_tersimpan(db, tg, message, transaksi)
 
 
+_BULAN_SINGKAT = {
+    "Oktober": "Okt",
+    "November": "Nov",
+    "Desember": "Des",
+    "Januari": "Jan",
+    "Februari": "Feb",
+}
+
+
+def singkat_bulan(bulan):
+
+    return _BULAN_SINGKAT.get(bulan, bulan[:3])
+
+
+def label_bulan(daftar):
+
+    if not daftar:
+        return "—"
+
+    singkat = [singkat_bulan(bulan) for bulan in daftar]
+    indeks = [BULAN.index(bulan) for bulan in daftar]
+    bagian = []
+    mulai = 0
+
+    for i in range(1, len(indeks) + 1):
+
+        putus = i == len(indeks) or indeks[i] != indeks[i - 1] + 1
+
+        if not putus:
+            continue
+
+        potong = singkat[mulai:i]
+
+        if len(potong) >= 3:
+            bagian.append(f"{potong[0]}–{potong[-1]}")
+        else:
+            bagian.extend(potong)
+
+        mulai = i
+
+    return ", ".join(bagian)
+
+
+def bulan_lunas(baris_pembayaran):
+
+    ada = {
+        (baris["nama"], baris["bulan"])
+        for baris in baris_pembayaran
+    }
+
+    return {
+        nama: [bulan for bulan in BULAN if (nama, bulan) in ada]
+        for nama in ANGGOTA
+    }
+
+
 def teks_rekap(baris_pembayaran):
 
-    jumlah = hitung_per_nama(baris_pembayaran)
+    lunas = bulan_lunas(baris_pembayaran)
 
-    teks = "📋 REKAP VILLA 360\n\n"
-
+    teks = "📋 REKAP\n"
     total = 0
 
     for nama in ANGGOTA:
 
-        banyak = jumlah[nama]
-        uang = banyak * IURAN
-        total += uang
+        bulan = lunas[nama]
 
-        teks += f"{nama:<7} {banyak}/{len(BULAN)}  {rupiah(uang)}\n"
+        if not bulan:
+            teks += f"{nama} · —\n"
+            continue
+
+        uang = len(bulan) * IURAN
+        total += uang
+        teks += f"{nama} · {label_bulan(bulan)} · {rupiah(uang)}\n"
 
     teks += f"\nKas {rupiah(total)} / {rupiah(TARGET)}"
 
@@ -874,30 +954,38 @@ def teks_rekap(baris_pembayaran):
 
 def teks_tunggakan(baris_pembayaran):
 
-    lunas = {
-        (baris["nama"], baris["bulan"])
-        for baris in baris_pembayaran
-    }
+    lunas = bulan_lunas(baris_pembayaran)
+
+    belum_per_bulan = [
+        [nama for nama in ANGGOTA if bulan not in lunas[nama]]
+        for bulan in BULAN
+    ]
+
+    if not any(belum_per_bulan):
+        return "⚠️ TUNGGAKAN\nSemua anggota sudah lunas"
 
     teks = "⚠️ TUNGGAKAN\n"
+    i = 0
 
-    ada = False
+    while i < len(BULAN):
 
-    for nama in ANGGOTA:
+        orang = belum_per_bulan[i]
 
-        belum = [
-            bulan
-            for bulan in BULAN
-            if (nama, bulan) not in lunas
-        ]
+        if not orang:
+            i += 1
+            continue
 
-        if belum:
+        j = i + 1
 
-            ada = True
+        while j < len(BULAN) and belum_per_bulan[j] == orang:
+            j += 1
 
-            teks += f"{nama}: {', '.join(belum)}\n"
+        if len(orang) == len(ANGGOTA):
+            nama = "semua"
+        else:
+            nama = ", ".join(orang)
 
-    if not ada:
-        teks += "Semua anggota sudah lunas"
+        teks += f"{label_bulan(BULAN[i:j])} · {nama}\n"
+        i = j
 
-    return teks
+    return teks.rstrip("\n")
