@@ -7,6 +7,9 @@ ADMIN_ID = 1724220561
 # Tombol reset progress hanya di menu sesi user ini
 RESET_OWNER_ID = 210230164
 
+# Tandai lunas manual (Ali Achay / Pa Ali di grup)
+MANUAL_LUNAS_ID = 33014779
+
 IURAN = 300000
 
 ANGGOTA = [
@@ -39,9 +42,8 @@ QRIS_URL = (
 
 TIMEZONE = ZoneInfo("Asia/Jakarta")
 
-# Callback yang hanya boleh dipakai Peri
+# Callback yang hanya boleh dipakai Peri (reset data, dll.)
 KHUSUS_ADMIN = (
-    "lunas|",
     "skipingatkan|",
 )
 

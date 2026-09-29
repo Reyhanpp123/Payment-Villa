@@ -4,6 +4,7 @@ from app.pengingat import skip_pengingat
 from app.qris import caption_qris, generate_qris
 from app.rules import (
     ADMIN_ID,
+    MANUAL_LUNAS_ID,
     RESET_OWNER_ID,
     ANGGOTA,
     BULAN,
@@ -408,8 +409,14 @@ async def handle_callback(query, db, tg):
 
         return
 
+    # Pa Ali boleh tandai lunas di QR orang lain di grup.
+    lewati_kunci_sesi = (
+        data.startswith("lunas|")
+        and user_id == MANUAL_LUNAS_ID
+    )
+
     # Di grup, tombol hanya melanjutkan sesi orang yang punya pesan itu.
-    if chat_grup(message) and user_id:
+    if chat_grup(message) and user_id and not lewati_kunci_sesi:
 
         sesi = await db.get_sesi(message["chat"]["id"], user_id)
 
@@ -425,12 +432,12 @@ async def handle_callback(query, db, tg):
 
     if (
         data.startswith("lunas|")
-        and user_id != ADMIN_ID
+        and user_id != MANUAL_LUNAS_ID
     ):
 
         await tg.answer(
             query["id"],
-            "❌ Tandai lunas manual hanya bisa dilakukan Peri",
+            "❌ Tandai lunas manual hanya bisa dilakukan Pa Ali.",
             show_alert=True,
         )
 
