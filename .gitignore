@@ -1,0 +1,16 @@
+# Rahasia (token bot, PUSH_SECRET)
+.env
+
+# Data pembayaran
+*.db
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Backup lama (pernah berisi token)
+BACKUP.TXT
