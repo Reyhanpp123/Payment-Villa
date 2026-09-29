@@ -64,10 +64,42 @@ ALIAS_GRUP = {
     ("rey",): "Reyhan",
     ("beny", "benoy"): "Benoy",
     ("feri",): "Peri",
+    ("bayu",): "Bayu",
     ("bayu", "lingga"): "Bayu",
+    ("lingga", "bayu"): "Bayu",
     ("ali", "achay"): "Pa Ali",
+    ("ali",): "Pa Ali",
     ("indra", "purnama"): "Indro",
+    ("indra",): "Indro",
 }
+
+
+def kata_nama_user(user):
+
+    if not user:
+        return ()
+
+    potong = [
+        user.get("first_name") or "",
+        user.get("last_name") or "",
+    ]
+
+    return tuple(kata(" ".join(potong)))
+
+
+def cocok_kata(kunci, nama):
+
+    # Urutan kata di profil Telegram tidak selalu sama dengan di grup.
+    if not kunci or not nama:
+        return False
+
+    set_kunci = set(kunci)
+    set_nama = set(nama)
+
+    if not set_kunci <= set_nama:
+        return False
+
+    return len(nama) <= len(kunci) + 1
 
 
 def nama_anggota_user(user):
@@ -75,16 +107,24 @@ def nama_anggota_user(user):
     if not user:
         return None
 
-    lengkap = tuple(kata(
-        f"{user.get('first_name') or ''} {user.get('last_name') or ''}"
-    ))
+    lengkap = kata_nama_user(user)
+
+    if not lengkap:
+        return None
 
     if lengkap in ALIAS_GRUP:
         return ALIAS_GRUP[lengkap]
 
+    for kunci in sorted(ALIAS_GRUP, key=len, reverse=True):
+
+        if cocok_kata(kunci, lengkap):
+            return ALIAS_GRUP[kunci]
+
     for anggota in ANGGOTA:
 
-        if lengkap == tuple(kata(anggota)):
+        kunci = tuple(kata(anggota))
+
+        if lengkap == kunci or cocok_kata(kunci, lengkap):
             return anggota
 
     return None
