@@ -530,13 +530,13 @@ async def handle_callback(query, db, tg):
 
     if data == "bayar":
 
-        await layar_bulan(tg, message, nama_anggota_user(user))
+        await layar_bulan(db, tg, message, nama_anggota_user(user))
 
         return
 
     if data.startswith("nama|"):
 
-        await layar_bulan(tg, message, data.split("|", 1)[1])
+        await layar_bulan(db, tg, message, data.split("|", 1)[1])
 
         return
 
@@ -712,12 +712,29 @@ def nama_target_bayar(data):
     return None
 
 
-async def layar_bulan(tg, message, nama):
+async def layar_bulan(db, tg, message, nama):
 
-    baris = [
-        [tombol(bulan, f"bulan|{nama}|{bulan}")]
-        for bulan in BULAN
-    ]
+    # Bulan yang sudah lunas untuk orang ini tidak ditampilkan.
+
+    baris = []
+
+    for bulan in BULAN:
+
+        if await db.sudah_lunas(nama, bulan):
+            continue
+
+        baris.append([tombol(bulan, f"bulan|{nama}|{bulan}")])
+
+    if not baris:
+
+        await tampilkan(
+            tg,
+            message,
+            f"✅ {nama}\nSemua bulan sudah lunas.",
+            menu_pengguna(),
+        )
+
+        return
 
     baris += tombol_kembali("kembali")
 
