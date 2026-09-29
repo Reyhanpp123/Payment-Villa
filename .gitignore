@@ -9,6 +9,9 @@ venv/
 __pycache__/
 *.pyc
 
+# Vercel CLI
+.vercel
+
 # macOS
 .DS_Store
 
