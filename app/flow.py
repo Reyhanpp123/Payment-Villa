@@ -14,6 +14,7 @@ from app.rules import (
     papan,
     rupiah,
     teks_berhasil,
+    PERINTAH_BOT,
     teks_mulai,
     teks_progress,
     teks_transaksi,
@@ -191,6 +192,69 @@ async def kirim_qr(db, tg, message, qris, caption, user_id=None):
     await hapus_qr_lama(tg, qris["qr_lama"])
 
 
+_perintah_siap = False
+
+
+async def pastikan_perintah(tg):
+
+    global _perintah_siap
+
+    if _perintah_siap:
+        return
+
+    try:
+        await tg.daftarkan_perintah(PERINTAH_BOT)
+        _perintah_siap = True
+    except Exception as e:
+        print("GAGAL DAFTAR PERINTAH:", repr(e))
+
+
+async def balas_layar(db, tg, message, teks, markup=None):
+
+    pesan = await tg.send_message(
+        message["chat"]["id"],
+        teks,
+        menu() if markup is None else markup,
+        reply_to=message["message_id"],
+    )
+
+    user = message.get("from") or {}
+
+    if user.get("id"):
+        await db.simpan_sesi(
+            message["chat"]["id"],
+            user["id"],
+            pesan["message_id"],
+        )
+
+    return pesan
+
+
+async def atur_pengingat(db, tg, message, lewat_tombol=False):
+
+    if not chat_grup(message):
+
+        teks = (
+            "Pengingat dipakai di grup, supaya pesannya masuk ke grup itu."
+        )
+
+    else:
+
+        await db.simpan_tujuan_pengingat(message["chat"]["id"])
+
+        teks = (
+            "✅ Pengingat iuran dikirim ke grup ini tiap tanggal 1 pagi, "
+            "untuk yang belum bayar. Tombol pada pesan itu mematikan "
+            "pengingat bulan berjalan."
+        )
+
+    if lewat_tombol:
+        await tampilkan(tg, message, teks, menu())
+        return
+
+    await balas_layar(db, tg, message, teks)
+
+
 async def handle_update(update, db, tg):
 
     if "callback_query" in update:
@@ -200,6 +264,8 @@ async def handle_update(update, db, tg):
 
     token_user = USER_SESI.set(user_id)
     token_db = DB_SESI.set(db)
+
+    await pastikan_perintah(tg)
 
     try:
         await _handle_update(update, db, tg)
@@ -223,58 +289,47 @@ async def _handle_update(update, db, tg):
 
     if perintah == "/start":
 
-        user = message.get("from") or {}
-
-        pesan = await tg.send_message(
-            message["chat"]["id"],
-            teks_mulai(),
-            menu(),
-            reply_to=message["message_id"],
-        )
-
-        if user.get("id"):
-            await db.simpan_sesi(
-                message["chat"]["id"],
-                user["id"],
-                pesan["message_id"],
-            )
+        await balas_layar(db, tg, message, teks_mulai())
 
         return
 
     if perintah == "/ingatkan":
 
-        user = message.get("from") or {}
+        await atur_pengingat(db, tg, message)
 
-        if user.get("id") != ADMIN_ID:
+        return
 
-            await tg.send_message(
-                message["chat"]["id"],
-                "❌ Pengingat hanya bisa diatur Peri",
-                reply_to=message["message_id"],
-            )
+    if perintah == "/progress":
 
-            return
-
-        if not chat_grup(message):
-
-            await tg.send_message(
-                message["chat"]["id"],
-                "Kirim /ingatkan di grup yang akan menerima pengingat.",
-                reply_to=message["message_id"],
-            )
-
-            return
-
-        await db.simpan_tujuan_pengingat(message["chat"]["id"])
-
-        await tg.send_message(
-            message["chat"]["id"],
-            (
-                "✅ Pengingat iuran dikirim ke grup ini tiap tanggal 1 pagi, "
-                "untuk yang belum bayar. Tombol pada pesan itu mematikan "
-                "pengingat bulan berjalan."
+        await balas_layar(
+            db,
+            tg,
+            message,
+            teks_progress(
+                hitung_per_nama(await db.semua_pembayaran())
             ),
-            reply_to=message["message_id"],
+        )
+
+        return
+
+    if perintah == "/rekap":
+
+        await balas_layar(
+            db,
+            tg,
+            message,
+            teks_rekap(await db.semua_pembayaran()),
+        )
+
+        return
+
+    if perintah == "/tunggakan":
+
+        await balas_layar(
+            db,
+            tg,
+            message,
+            teks_tunggakan(await db.semua_pembayaran()),
         )
 
         return
@@ -307,19 +362,9 @@ async def handle_callback(query, db, tg):
 
     user_id = user.get("id")
 
-    # Pesan pengingat bukan sesi /start siapa pun.
-    # Tombol skip tetap boleh ditekan Peri.
+    # Pesan pengingat dikirim ke grup, bukan sesi satu orang.
+    # Siapa saja di grup itu boleh mematikan pengingat bulan ini.
     if data.startswith("skipingatkan|"):
-
-        if user_id != ADMIN_ID:
-
-            await tg.answer(
-                query["id"],
-                "❌ Pengingat hanya bisa diatur Peri",
-                show_alert=True,
-            )
-
-            return
 
         await tg.answer(query["id"])
 
@@ -393,6 +438,12 @@ async def handle_callback(query, db, tg):
 
     if not data.startswith("cekqr|"):
         await tg.answer(query["id"])
+
+    if data == "ingatkan":
+
+        await atur_pengingat(db, tg, message, lewat_tombol=True)
+
+        return
 
     if data == "kembali":
 

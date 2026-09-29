@@ -165,7 +165,17 @@ def menu():
             tombol("📋 Rekap", "rekap"),
         ],
         [tombol("⚠️ Tunggakan", "tunggakan")],
+        [tombol("🔔 Pengingat", "ingatkan")],
     ])
+
+
+PERINTAH_BOT = [
+    {"command": "start", "description": "Menu utama"},
+    {"command": "progress", "description": "Progress iuran"},
+    {"command": "rekap", "description": "Rekap iuran"},
+    {"command": "tunggakan", "description": "Daftar tunggakan"},
+    {"command": "ingatkan", "description": "Aktifkan pengingat di grup ini"},
+]
 
 
 def tombol_kembali(target):

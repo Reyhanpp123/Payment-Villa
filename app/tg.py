@@ -49,6 +49,24 @@ class Telegram:
 
         return await self.call("sendMessage", payload)
 
+    async def daftarkan_perintah(self, perintah):
+
+        # Daftar ini yang muncul saat "/" ditekan di Telegram.
+        # Grup butuh scope sendiri; default hanya chat pribadi.
+
+        for scope in (
+            {"type": "all_private_chats"},
+            {"type": "all_group_chats"},
+        ):
+
+            await self.call(
+                "setMyCommands",
+                {
+                    "commands": perintah,
+                    "scope": scope,
+                },
+            )
+
     async def edit_text(self, chat_id, message_id, teks, reply_markup=None):
 
         payload = {
