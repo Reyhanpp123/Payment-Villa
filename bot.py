@@ -41,7 +41,7 @@ IURAN = 300000
 
 ANGGOTA = [
     "Benoy",
-    "Reyhan",
+    "Rey",
     "Pa Ali",
     "Bayu",
     "Indro",

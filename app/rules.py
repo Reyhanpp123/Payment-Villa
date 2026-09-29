@@ -38,14 +38,53 @@ TIMEZONE = ZoneInfo("Asia/Jakarta")
 
 # Callback yang hanya boleh dipakai Peri
 KHUSUS_ADMIN = (
-    "bayar",
-    "nama|",
-    "bulan|",
-    "buatqr|",
-    "cekqr|",
     "lunas|",
     "skipingatkan|",
 )
+
+
+def kata(teks):
+
+    return [
+        bagian
+        for bagian in "".join(
+            huruf.lower() if huruf.isalnum() else " "
+            for huruf in (teks or "")
+        ).split()
+        if bagian
+    ]
+
+
+# Nama tampilan di grup -> nama iuran.
+# Username tidak dipakai, karena bisa diganti siapa saja.
+ALIAS_GRUP = {
+    ("rey",): "Reyhan",
+    ("beny", "benoy"): "Benoy",
+    ("feri",): "Peri",
+    ("bayu", "lingga"): "Bayu",
+    ("ali", "achay"): "Pa Ali",
+    ("indra", "purnama"): "Indro",
+}
+
+
+def nama_anggota_user(user):
+
+    if not user:
+        return None
+
+    lengkap = tuple(kata(
+        f"{user.get('first_name') or ''} {user.get('last_name') or ''}"
+    ))
+
+    if lengkap in ALIAS_GRUP:
+        return ALIAS_GRUP[lengkap]
+
+    for anggota in ANGGOTA:
+
+        if lengkap == tuple(kata(anggota)):
+            return anggota
+
+    return None
 
 
 def rupiah(angka):

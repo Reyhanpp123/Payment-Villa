@@ -7,10 +7,10 @@ from app.rules import (
     ANGGOTA,
     BULAN,
     IURAN,
-    KHUSUS_ADMIN,
     TARGET,
     hitung_per_nama,
     menu,
+    nama_anggota_user,
     papan,
     rupiah,
     teks_berhasil,
@@ -348,17 +348,48 @@ async def handle_callback(query, db, tg):
             return
 
     if (
-        data.startswith(KHUSUS_ADMIN)
+        data.startswith("lunas|")
         and user_id != ADMIN_ID
     ):
 
         await tg.answer(
             query["id"],
-            "❌ Pembayaran hanya bisa dilakukan Peri",
+            "❌ Tandai lunas manual hanya bisa dilakukan Peri",
             show_alert=True,
         )
 
         return
+
+    if data == "bayar" or data.startswith((
+        "nama|",
+        "bulan|",
+        "buatqr|",
+        "cekqr|",
+    )):
+
+        punya = nama_anggota_user(user)
+
+        if not punya:
+
+            await tg.answer(
+                query["id"],
+                "❌ Nama Telegram kamu tidak ada di daftar anggota.",
+                show_alert=True,
+            )
+
+            return
+
+        target = nama_target_bayar(data)
+
+        if target and target != punya:
+
+            await tg.answer(
+                query["id"],
+                "❌ Kamu hanya bisa membayar atas nama sendiri.",
+                show_alert=True,
+            )
+
+            return
 
     if not data.startswith("cekqr|"):
         await tg.answer(query["id"])
@@ -380,50 +411,13 @@ Pilih menu:
 
     if data == "bayar":
 
-        baris = [
-            [tombol(nama, f"nama|{nama}")]
-            for nama in ANGGOTA
-        ]
-
-        baris += tombol_kembali("kembali")
-
-        await tampilkan(
-            tg,
-            message,
-            """
-💸 BAYAR IURAN
-
-Pilih nama:
-""",
-            papan(baris),
-        )
+        await layar_bulan(tg, message, nama_anggota_user(user))
 
         return
 
     if data.startswith("nama|"):
 
-        nama = data.split("|", 1)[1]
-
-        baris = [
-            [tombol(bulan, f"bulan|{nama}|{bulan}")]
-            for bulan in BULAN
-        ]
-
-        baris += tombol_kembali("bayar")
-
-        await tampilkan(
-            tg,
-            message,
-            f"""
-💸 BAYAR IURAN
-
-👤 Nama:
-{nama}
-
-Pilih bulan:
-""",
-            papan(baris),
-        )
+        await layar_bulan(tg, message, data.split("|", 1)[1])
 
         return
 
@@ -508,7 +502,13 @@ Pilih bulan:
 
     if data.startswith("cekqr|"):
 
-        await cek_pembayaran(db, tg, query, message)
+        await cek_pembayaran(
+            db,
+            tg,
+            query,
+            message,
+            nama_anggota_user(user),
+        )
 
         return
 
@@ -591,6 +591,45 @@ Pilih bulan:
             teks_tunggakan(await db.semua_pembayaran()),
             menu(),
         )
+
+
+def nama_target_bayar(data):
+
+    if data.startswith("nama|"):
+        return data.split("|", 1)[1]
+
+    if data.startswith(("bulan|", "buatqr|")):
+
+        bagian = data.split("|")
+
+        if len(bagian) >= 3:
+            return bagian[1]
+
+    return None
+
+
+async def layar_bulan(tg, message, nama):
+
+    baris = [
+        [tombol(bulan, f"bulan|{nama}|{bulan}")]
+        for bulan in BULAN
+    ]
+
+    baris += tombol_kembali("kembali")
+
+    await tampilkan(
+        tg,
+        message,
+        f"""
+💸 BAYAR IURAN
+
+👤 Nama:
+{nama}
+
+Pilih bulan:
+""",
+        papan(baris),
+    )
 
 
 async def lanjut_bayar(db, tg, message, nama, bulan):
@@ -700,7 +739,7 @@ MENUNGGU PEMBAYARAN
     )
 
 
-async def cek_pembayaran(db, tg, query, message):
+async def cek_pembayaran(db, tg, query, message, nama_sendiri):
 
     trxid = query["data"].split("|", 1)[1]
 
@@ -711,6 +750,16 @@ async def cek_pembayaran(db, tg, query, message):
         await tg.answer(
             query["id"],
             "❌ Transaksi tidak ditemukan",
+            show_alert=True,
+        )
+
+        return
+
+    if transaksi["nama"] != nama_sendiri:
+
+        await tg.answer(
+            query["id"],
+            "❌ Ini bukan pembayaran kamu.",
             show_alert=True,
         )
 
