@@ -1,4 +1,5 @@
 import json
+import os
 import secrets
 import traceback
 from urllib.parse import parse_qs
@@ -7,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.flow import handle_update, pembayaran_selesai
+from app.pengingat import kirim_pengingat
 from app.rules import menu
 from app.settings import load_settings
 from app.store import Store
@@ -44,6 +46,40 @@ async def baca_push(request, raw):
 async def health():
 
     return {"success": True, "msg": "Webhook Villa 360 aktif"}
+
+
+@app.get("/api/cron/pengingat")
+async def cron_pengingat(request: Request):
+
+    rahasia = os.getenv("CRON_SECRET") or ""
+    header = request.headers.get("authorization", "")
+    token = header.removeprefix("Bearer ").strip()
+
+    if (
+        not rahasia
+        or not header.startswith("Bearer ")
+        or len(token) != len(rahasia)
+        or not secrets.compare_digest(token, rahasia)
+    ):
+
+        return JSONResponse(
+            {"success": False, "msg": "forbidden"},
+            status_code=401,
+        )
+
+    settings = load_settings()
+    db = Store(settings.supabase_url, settings.supabase_key)
+    tg = Telegram(settings.bot_token)
+
+    try:
+        hasil = await kirim_pengingat(db, tg)
+    finally:
+        await db.close()
+        await tg.close()
+
+    print("PENGINGAT:", hasil)
+
+    return {"success": True, "msg": hasil}
 
 
 @app.post("/api/telegram")

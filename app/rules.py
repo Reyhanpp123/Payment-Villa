@@ -44,6 +44,7 @@ KHUSUS_ADMIN = (
     "buatqr|",
     "cekqr|",
     "lunas|",
+    "skipingatkan|",
 )
 
 
@@ -56,6 +57,21 @@ def rupiah(angka):
 def sekarang():
 
     return datetime.now(TIMEZONE)
+
+
+def bulan_berjalan(saat=None):
+
+    # Nama bulan iuran yang sama dengan tanggal hari ini, atau None
+    # kalau hari ini di luar Oktober 2026–Februari 2027.
+
+    saat = saat or sekarang()
+
+    for nama, (tahun, nomor) in PERIODE.items():
+
+        if tahun == saat.year and nomor == saat.month:
+            return nama
+
+    return None
 
 
 def buat_trxid(nama, bulan):

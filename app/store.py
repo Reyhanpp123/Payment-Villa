@@ -194,6 +194,119 @@ class Store:
 
         return True, "PEMBAYARAN BERHASIL"
 
+    async def get_sesi(self, chat_id, user_id):
+
+        baris = await self._get(
+            "sesi",
+            {
+                "select": "message_id",
+                "chat_id": f"eq.{chat_id}",
+                "user_id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+
+        return baris[0] if baris else None
+
+    async def simpan_sesi(self, chat_id, user_id, message_id):
+
+        # Satu baris per orang per chat, supaya layar di grup
+        # tidak saling menimpa.
+
+        response = await self.client.post(
+            f"{self.url}/rest/v1/sesi",
+            params={"on_conflict": "chat_id,user_id"},
+            headers={
+                "Prefer": "resolution=merge-duplicates,return=minimal",
+            },
+            json={
+                "chat_id": chat_id,
+                "user_id": user_id,
+                "message_id": message_id,
+                "updated_at": sekarang().isoformat(),
+            },
+        )
+
+        self._raise(response, "sesi")
+
+    async def pindah_sesi(self, chat_id, message_id_lama, message_id_baru):
+
+        if not message_id_lama or not message_id_baru:
+            return
+
+        await self._patch(
+            "sesi",
+            {
+                "chat_id": f"eq.{chat_id}",
+                "message_id": f"eq.{message_id_lama}",
+            },
+            {
+                "message_id": message_id_baru,
+                "updated_at": sekarang().isoformat(),
+            },
+        )
+
+    async def get_tujuan_pengingat(self):
+
+        baris = await self._get(
+            "pengingat_tujuan",
+            {
+                "select": "chat_id",
+                "id": "eq.1",
+                "limit": "1",
+            },
+        )
+
+        return baris[0]["chat_id"] if baris else None
+
+    async def simpan_tujuan_pengingat(self, chat_id):
+
+        response = await self.client.post(
+            f"{self.url}/rest/v1/pengingat_tujuan",
+            params={"on_conflict": "id"},
+            headers={
+                "Prefer": "resolution=merge-duplicates,return=minimal",
+            },
+            json={
+                "id": 1,
+                "chat_id": chat_id,
+                "updated_at": sekarang().isoformat(),
+            },
+        )
+
+        self._raise(response, "pengingat_tujuan")
+
+    async def get_pengingat(self, bulan):
+
+        baris = await self._get(
+            "pengingat",
+            {
+                "select": "bulan,status,message_id",
+                "bulan": f"eq.{bulan}",
+                "limit": "1",
+            },
+        )
+
+        return baris[0] if baris else None
+
+    async def simpan_pengingat(self, bulan, status, message_id=None):
+
+        response = await self.client.post(
+            f"{self.url}/rest/v1/pengingat",
+            params={"on_conflict": "bulan"},
+            headers={
+                "Prefer": "resolution=merge-duplicates,return=minimal",
+            },
+            json={
+                "bulan": bulan,
+                "status": status,
+                "message_id": message_id,
+                "updated_at": sekarang().isoformat(),
+            },
+        )
+
+        self._raise(response, "pengingat")
+
     async def hapus_semua(self):
 
         for tabel in ("pembayaran", "qris_transactions"):

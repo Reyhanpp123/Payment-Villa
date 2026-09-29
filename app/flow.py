@@ -1,3 +1,6 @@
+from contextvars import ContextVar
+
+from app.pengingat import skip_pengingat
 from app.qris import caption_qris, generate_qris
 from app.rules import (
     ADMIN_ID,
@@ -19,6 +22,10 @@ from app.rules import (
 )
 
 
+USER_SESI = ContextVar("user_sesi", default=None)
+DB_SESI = ContextVar("db_sesi", default=None)
+
+
 def nama_perintah(teks):
 
     if not teks or not teks.startswith("/"):
@@ -29,21 +36,36 @@ def nama_perintah(teks):
     return perintah.split("@", 1)[0].lower()
 
 
-async def tampilkan(tg, message, teks, reply_markup=None):
+def chat_grup(message):
+
+    return message.get("chat", {}).get("type") in ("group", "supergroup")
+
+
+async def tampilkan(tg, message, teks, reply_markup=None, db=None, user_id=None):
 
     # Pesan foto (QRIS) tidak punya teks untuk diedit,
     # jadi kirim pesan baru.
 
     if message.get("photo"):
 
-        await tg.send_message(
+        pesan = await tg.send_message(
             message["chat"]["id"],
             teks,
             reply_markup,
             reply_to=message["message_id"],
         )
 
-        return
+        db = db or DB_SESI.get()
+        user_id = user_id or USER_SESI.get()
+
+        if db and user_id:
+            await db.simpan_sesi(
+                message["chat"]["id"],
+                user_id,
+                pesan["message_id"],
+            )
+
+        return pesan
 
     await tg.edit_text(
         message["chat"]["id"],
@@ -51,6 +73,8 @@ async def tampilkan(tg, message, teks, reply_markup=None):
         teks,
         reply_markup,
     )
+
+    return message
 
 
 async def hapus_qr_lama(tg, qr_lama):
@@ -63,11 +87,13 @@ async def hapus_qr_lama(tg, qr_lama):
     await tg.delete_message(chat_id, message_id)
 
 
-async def pembayaran_selesai(db, tg, trxid, message=None):
+async def pembayaran_selesai(db, tg, trxid, message=None, user_id=None):
 
     # QRIS dihapus, diganti pesan
     # PEMBAYARAN SELESAI + progress dana terbaru.
     # message=None -> dipanggil dari push provider.
+
+    user_id = user_id or USER_SESI.get()
 
     row = await db.get_qris(trxid)
 
@@ -105,7 +131,7 @@ async def pembayaran_selesai(db, tg, trxid, message=None):
     # Ditekan dari layar teks -> ganti layar itu
     if message and not foto:
 
-        await tampilkan(tg, message, teks, menu())
+        await tampilkan(tg, message, teks, menu(), db, user_id)
 
         return
 
@@ -117,10 +143,15 @@ async def pembayaran_selesai(db, tg, trxid, message=None):
     if not tujuan:
         raise RuntimeError("chat tujuan tidak ada")
 
-    await tg.send_message(tujuan, teks, menu())
+    pesan = await tg.send_message(tujuan, teks, menu())
+
+    if user_id:
+        await db.simpan_sesi(tujuan, user_id, pesan["message_id"])
+    elif message_id:
+        await db.pindah_sesi(tujuan, message_id, pesan["message_id"])
 
 
-async def kirim_qr(db, tg, message, qris, caption):
+async def kirim_qr(db, tg, message, qris, caption, user_id=None):
 
     pesan = await tg.send_photo(
         message["chat"]["id"],
@@ -139,10 +170,36 @@ async def kirim_qr(db, tg, message, qris, caption):
         pesan["message_id"],
     )
 
+    user_id = user_id or USER_SESI.get()
+
+    if user_id:
+        await db.simpan_sesi(
+            pesan["chat"]["id"],
+            user_id,
+            pesan["message_id"],
+        )
+
     await hapus_qr_lama(tg, qris["qr_lama"])
 
 
 async def handle_update(update, db, tg):
+
+    if "callback_query" in update:
+        user_id = (update["callback_query"].get("from") or {}).get("id")
+    else:
+        user_id = ((update.get("message") or {}).get("from") or {}).get("id")
+
+    token_user = USER_SESI.set(user_id)
+    token_db = DB_SESI.set(db)
+
+    try:
+        await _handle_update(update, db, tg)
+    finally:
+        USER_SESI.reset(token_user)
+        DB_SESI.reset(token_db)
+
+
+async def _handle_update(update, db, tg):
 
     if "callback_query" in update:
         await handle_callback(update["callback_query"], db, tg)
@@ -156,12 +213,64 @@ async def handle_update(update, db, tg):
     perintah = nama_perintah(message.get("text"))
 
     if perintah == "/start":
-        await tg.send_message(
+
+        user = message.get("from") or {}
+
+        pesan = await tg.send_message(
             message["chat"]["id"],
             teks_mulai(),
             menu(),
             reply_to=message["message_id"],
         )
+
+        if user.get("id"):
+            await db.simpan_sesi(
+                message["chat"]["id"],
+                user["id"],
+                pesan["message_id"],
+            )
+
+        return
+
+    if perintah == "/ingatkan":
+
+        user = message.get("from") or {}
+
+        if user.get("id") != ADMIN_ID:
+
+            await tg.send_message(
+                message["chat"]["id"],
+                "❌ Pengingat hanya bisa diatur Peri",
+                reply_to=message["message_id"],
+            )
+
+            return
+
+        if not chat_grup(message):
+
+            await tg.send_message(
+                message["chat"]["id"],
+                "Kirim /ingatkan di grup yang akan menerima pengingat.",
+                reply_to=message["message_id"],
+            )
+
+            return
+
+        await db.simpan_tujuan_pengingat(message["chat"]["id"])
+
+        await tg.send_message(
+            message["chat"]["id"],
+            """
+✅ Pengingat iuran akan dikirim ke grup ini.
+
+Tiap tanggal 1, pagi WIB, untuk anggota yang belum bayar.
+Kalau pengiriman gagal, dicoba lagi hari berikutnya.
+
+Tombol pada pesan itu mematikan sisa pengingat bulan berjalan.
+""",
+            reply_to=message["message_id"],
+        )
+
         return
 
     if perintah == "/resetsemuadataanjing":
@@ -195,9 +304,52 @@ async def handle_callback(query, db, tg):
         await tg.answer(query["id"])
         return
 
+    user_id = user.get("id")
+
+    # Pesan pengingat bukan sesi /start siapa pun.
+    # Tombol skip tetap boleh ditekan Peri.
+    if data.startswith("skipingatkan|"):
+
+        if user_id != ADMIN_ID:
+
+            await tg.answer(
+                query["id"],
+                "❌ Pengingat hanya bisa diatur Peri",
+                show_alert=True,
+            )
+
+            return
+
+        await tg.answer(query["id"])
+
+        await skip_pengingat(
+            db,
+            tg,
+            data.split("|", 1)[1],
+            message,
+        )
+
+        return
+
+    # Di grup, tiap orang punya pesan menu sendiri.
+    # Tombol di pesan orang lain tidak boleh mengubah layar itu.
+    if chat_grup(message) and user_id:
+
+        sesi = await db.get_sesi(message["chat"]["id"], user_id)
+
+        if not sesi or sesi.get("message_id") != message["message_id"]:
+
+            await tg.answer(
+                query["id"],
+                "Tombol ini milik sesi orang lain. Kirim /start untuk membuka sesi kamu.",
+                show_alert=True,
+            )
+
+            return
+
     if (
         data.startswith(KHUSUS_ADMIN)
-        and user.get("id") != ADMIN_ID
+        and user_id != ADMIN_ID
     ):
 
         await tg.answer(
