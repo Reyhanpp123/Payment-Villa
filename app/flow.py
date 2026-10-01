@@ -291,7 +291,7 @@ async def atur_pengingat(db, tg, message, lewat_tombol=False):
     await balas_layar(db, tg, message, teks)
 
 
-async def kirim_tagih(db, tg, message):
+async def kirim_tagih(db, tg, message, user=None):
 
     if not chat_grup(message):
 
@@ -326,9 +326,11 @@ async def kirim_tagih(db, tg, message):
 
         return
 
+    pengirim = nama_anggota_user(user) or "teman"
+
     await tg.send_message(
         message["chat"]["id"],
-        teks_tagih(belum, teks_tanggal()),
+        teks_tagih(belum, teks_tanggal(), pengirim),
     )
 
 
@@ -536,7 +538,7 @@ async def handle_callback(query, db, tg):
             return
 
         await tg.answer(query["id"])
-        await kirim_tagih(db, tg, message)
+        await kirim_tagih(db, tg, message, user)
 
         return
 
@@ -787,9 +789,9 @@ def nama_target_bayar(data):
 
 async def layar_bulan(db, tg, message, nama):
 
-    # Satu tombol saja: bulan paling awal yang sudah waktunya
-    # dan belum lunas. Bulan depan tidak ditampilkan.
-    # Kalau bulan itu sudah lunas, yang tersisa hanya tombol kembali.
+    # Satu tombol: bulan paling awal yang belum lunas.
+    # Bulan berikutnya baru masuk setelah bulan ini lunas,
+    # supaya bisa transfer dua kali berturut-turut.
 
     terbuka = bulan_terbuka()
     bulan = None
@@ -803,7 +805,7 @@ async def layar_bulan(db, tg, message, nama):
     if not bulan:
 
         if terbuka:
-            teks = f"✅ {nama}\n{terbuka[-1]} sudah lunas."
+            teks = f"✅ {nama}\nSampai {terbuka[-1]} sudah lunas."
         else:
             teks = f"{nama}\nBelum ada bulan yang bisa dibayar."
 

@@ -216,16 +216,28 @@ def bulan_berjalan(saat=None):
 
 def bulan_terbuka(saat=None):
 
-    # Bulan iuran yang sudah masuk waktunya, dari yang paling awal.
-    # Bulan di depan tanggal hari ini tidak ditawarkan.
+    # Bulan yang sudah masuk waktunya, plus satu bulan di depannya.
+    # Layar bayar tetap satu tombol: yang paling awal belum lunas.
+    # Jadi November baru muncul setelah Oktober orang itu lunas.
 
     saat = saat or sekarang()
+    nama_bulan = list(PERIODE)
+    terbuka = []
+    indeks_terakhir = None
 
-    return [
-        nama
-        for nama, (tahun, nomor) in PERIODE.items()
-        if (tahun, nomor) <= (saat.year, saat.month)
-    ]
+    for indeks, (nama, (tahun, nomor)) in enumerate(PERIODE.items()):
+
+        if (tahun, nomor) <= (saat.year, saat.month):
+            terbuka.append(nama)
+            indeks_terakhir = indeks
+
+    if (
+        indeks_terakhir is not None
+        and indeks_terakhir + 1 < len(nama_bulan)
+    ):
+        terbuka.append(nama_bulan[indeks_terakhir + 1])
+
+    return terbuka
 
 
 def trxid_acak(bulan, dipakai=()):

@@ -1,3 +1,5 @@
+import random
+
 from app.rules import (
     ANGGOTA,
     IURAN,
@@ -32,12 +34,26 @@ def teks_pengingat(bulan, belum):
     )
 
 
-def teks_tagih(belum, tanggal):
+KATA_TAGIH = (
+    "ceuk si {pengirim} {tag} bayar goblog ges tanggal {tanggal} can mayar keneh",
+    "ceuk si {pengirim} {tag} mayar atuh belegug, tanggal {tanggal} keneh can narik",
+    "ceuk si {pengirim} {tag} sia mah lila teuing goblog, {tanggal} can mayar",
+    "ceuk si {pengirim} {tag} cepetan mayar weh, tanggal {tanggal} geus asup belegug",
+    "ceuk si {pengirim} {tag} bayar tai, tanggal {tanggal} can aya duitna keneh",
+    "ceuk si {pengirim} {tag} maneh keneh nu can mayar tanggal {tanggal}, gerak goblog",
+    "ceuk si {pengirim} {tag} ulah cicing wae belegug, mayar tanggal {tanggal}",
+    "ceuk si {pengirim} {tag} iuran tanggal {tanggal} can kaluar keneh, bayar goblog",
+)
+
+
+def teks_tagih(belum, tanggal, pengirim):
 
     tag = " ".join(tag_anggota(nama) for nama in belum)
 
-    return (
-        f"{tag} bayar goblog ges tanggal {tanggal} can mayar keneh"
+    return random.choice(KATA_TAGIH).format(
+        pengirim=pengirim,
+        tag=tag,
+        tanggal=tanggal,
     )
 
 
