@@ -1,6 +1,6 @@
 import httpx
 
-from app.rules import buat_trxid, sekarang, trxid_selanjutnya
+from app.rules import sekarang, trxid_acak
 
 
 class Store:
@@ -106,21 +106,14 @@ class Store:
 
     async def trxid_berikutnya(self, nama, bulan):
 
-        dasar = buat_trxid(nama, bulan)
+        for _ in range(20):
 
-        baris = await self._get(
-            "qris_transactions",
-            {
-                "select": "trxid",
-                "nama": f"eq.{nama}",
-                "bulan": f"eq.{bulan}",
-            },
-        )
+            kandidat = trxid_acak(bulan)
 
-        return trxid_selanjutnya(
-            dasar,
-            {item["trxid"] for item in baris},
-        )
+            if not await self.get_qris(kandidat):
+                return kandidat
+
+        raise RuntimeError("Gagal membuat ID transaksi")
 
     async def ganti_pending_lain(self, nama, bulan, trxid_baru):
 

@@ -11,6 +11,7 @@ from app.rules import (
     IURAN,
     TARGET,
     bulan_berjalan,
+    bulan_terbuka,
     hitung_per_nama,
     menu,
     nama_anggota_user,
@@ -786,35 +787,43 @@ def nama_target_bayar(data):
 
 async def layar_bulan(db, tg, message, nama):
 
-    # Bulan yang sudah lunas untuk orang ini tidak ditampilkan.
+    # Satu tombol saja: bulan paling awal yang sudah waktunya
+    # dan belum lunas. Bulan depan tidak ditampilkan.
+    # Kalau bulan itu sudah lunas, yang tersisa hanya tombol kembali.
 
-    baris = []
+    terbuka = bulan_terbuka()
+    bulan = None
 
-    for bulan in BULAN:
+    for kandidat in terbuka:
 
-        if await db.sudah_lunas(nama, bulan):
-            continue
+        if not await db.sudah_lunas(nama, kandidat):
+            bulan = kandidat
+            break
 
-        baris.append([tombol(bulan, f"bulan|{nama}|{bulan}")])
+    if not bulan:
 
-    if not baris:
+        if terbuka:
+            teks = f"✅ {nama}\n{terbuka[-1]} sudah lunas."
+        else:
+            teks = f"{nama}\nBelum ada bulan yang bisa dibayar."
 
         await tampilkan(
             tg,
             message,
-            f"✅ {nama}\nSemua bulan sudah lunas.",
-            menu_pengguna(),
+            teks,
+            papan(tombol_kembali("kembali")),
         )
 
         return
-
-    baris += tombol_kembali("kembali")
 
     await tampilkan(
         tg,
         message,
         f"💸 BAYAR\n{nama}\nPilih bulan:",
-        papan(baris),
+        papan(
+            [[tombol(bulan, f"bulan|{nama}|{bulan}")]]
+            + tombol_kembali("kembali")
+        ),
     )
 
 

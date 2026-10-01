@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -213,37 +214,34 @@ def bulan_berjalan(saat=None):
     return None
 
 
-def buat_trxid(nama, bulan):
+def bulan_terbuka(saat=None):
 
-    # Format provider: 202610BENOY
-    # (tahun + bulan iuran + nama)
+    # Bulan iuran yang sudah masuk waktunya, dari yang paling awal.
+    # Bulan di depan tanggal hari ini tidak ditawarkan.
+
+    saat = saat or sekarang()
+
+    return [
+        nama
+        for nama, (tahun, nomor) in PERIODE.items()
+        if (tahun, nomor) <= (saat.year, saat.month)
+    ]
+
+
+def trxid_acak(bulan, dipakai=()):
+
+    # ID lama (202610INDRO) ditolak provider kalau pernah dipakai,
+    # termasuk setelah data lokal direset. Setiap QR pakai ID baru.
 
     tahun, nomor_bulan = PERIODE[bulan]
+    awalan = f"{tahun}{nomor_bulan:02d}"
 
-    nama_bersih = (
-        nama
-        .upper()
-        .replace(" ", "")
-        .replace("-", "")
-    )
+    while True:
 
-    return f"{tahun}{nomor_bulan:02d}" + nama_bersih
+        kandidat = awalan + secrets.token_hex(4).upper()
 
-
-def trxid_selanjutnya(dasar, dipakai):
-
-    # QR baru tidak boleh memakai trxid yang sudah ada.
-    # 202610REYHAN, lalu 202610REYHAN2, 202610REYHAN3, ...
-
-    if dasar not in dipakai:
-        return dasar
-
-    nomor = 2
-
-    while f"{dasar}{nomor}" in dipakai:
-        nomor += 1
-
-    return f"{dasar}{nomor}"
+        if kandidat not in dipakai:
+            return kandidat
 
 
 def tombol(teks, data):

@@ -6,10 +6,9 @@ from app.rules import (
     IURAN,
     PERIODE,
     QRIS_URL,
-    buat_trxid,
     sekarang,
     teks_transaksi,
-    trxid_selanjutnya,
+    trxid_acak,
 )
 
 
@@ -17,11 +16,10 @@ async def generate_qris(db, nama, bulan, trxid=None):
 
     # Provider menolak trxid yang pernah dipakai, meski sudah
     # dihapus dari database lokal (misalnya setelah reset).
-    # Kalau gagal, coba trxid berikutnya sampai diterima.
+    # Kalau gagal, buat ID acak lain sampai diterima.
 
-    dasar = buat_trxid(nama, bulan)
     dipakai = set()
-    kandidat = trxid or dasar
+    kandidat = trxid or trxid_acak(bulan, dipakai)
     terakhir = None
 
     for _ in range(20):
@@ -35,7 +33,7 @@ async def generate_qris(db, nama, bulan, trxid=None):
 
             terakhir = e
             dipakai.add(kandidat)
-            kandidat = trxid_selanjutnya(dasar, dipakai)
+            kandidat = trxid_acak(bulan, dipakai)
 
             print("QRIS TRXID DITOLAK, COBA:", kandidat)
 
