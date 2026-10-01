@@ -109,7 +109,7 @@ class Store:
 
         for _ in range(20):
 
-            kandidat = trxid_acak(bulan)
+            kandidat = trxid_acak(bulan, nama=nama)
 
             if not await self.get_qris(kandidat):
                 return kandidat

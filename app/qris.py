@@ -20,7 +20,7 @@ async def generate_qris(db, nama, bulan, trxid=None):
     # Kalau gagal, buat ID acak lain sampai diterima.
 
     dipakai = set()
-    kandidat = trxid or trxid_acak(bulan, dipakai)
+    kandidat = trxid or trxid_acak(bulan, dipakai, nama)
     terakhir = None
 
     for _ in range(20):
@@ -34,7 +34,7 @@ async def generate_qris(db, nama, bulan, trxid=None):
 
             terakhir = e
             dipakai.add(kandidat)
-            kandidat = trxid_acak(bulan, dipakai)
+            kandidat = trxid_acak(bulan, dipakai, nama)
 
             print("QRIS TRXID DITOLAK, COBA:", kandidat)
 

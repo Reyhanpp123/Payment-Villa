@@ -15,7 +15,7 @@ IURAN = 300000
 
 # Iuran khusus @feri30watt: QR = $300 × kurs saat generate.
 # Progress/kas tetap 1 slot Rp300.000. Set False untuk matikan.
-IURAN_USD_AKTIF = False
+IURAN_USD_AKTIF = True
 IURAN_USD_USERNAME = "feri30watt"
 IURAN_USD_ANGGOTA = "Peri"
 IURAN_USD_NOMINAL = 300
@@ -248,17 +248,24 @@ def bulan_terbuka(saat=None):
     return terbuka
 
 
-def trxid_acak(bulan, dipakai=()):
+def trxid_acak(bulan, dipakai=(), nama=None):
 
     # ID lama (202610INDRO) ditolak provider kalau pernah dipakai,
     # termasuk setelah data lokal direset. Setiap QR pakai ID baru.
+    # Peri: 202610PERI + acak, supaya mudah dikenali di provider.
 
     tahun, nomor_bulan = PERIODE[bulan]
     awalan = f"{tahun}{nomor_bulan:02d}"
 
+    if nama == "Peri":
+        awalan += "PERI"
+        acak = 3
+    else:
+        acak = 4
+
     while True:
 
-        kandidat = awalan + secrets.token_hex(4).upper()
+        kandidat = awalan + secrets.token_hex(acak).upper()
 
         if kandidat not in dipakai:
             return kandidat
