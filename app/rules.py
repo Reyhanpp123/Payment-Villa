@@ -15,7 +15,7 @@ IURAN = 300000
 
 # Iuran khusus @feri30watt: QR = $300 × kurs saat generate.
 # Progress/kas tetap 1 slot Rp300.000. Set False untuk matikan.
-IURAN_USD_AKTIF = True
+IURAN_USD_AKTIF = False
 IURAN_USD_USERNAME = "feri30watt"
 IURAN_USD_ANGGOTA = "Peri"
 IURAN_USD_NOMINAL = 300
