@@ -61,7 +61,8 @@ def kata(teks):
 
 
 # Nama tampilan di grup -> nama iuran.
-# Username tidak dipakai, karena bisa diganti siapa saja.
+# Username bebas tidak dipakai, karena bisa diganti siapa saja.
+# Hanya username di daftar tetap ini yang dikenali.
 ALIAS_GRUP = {
     ("rey",): "Reyhan",
     ("beny", "benoy"): "Benoy",
@@ -73,6 +74,20 @@ ALIAS_GRUP = {
     ("ali",): "Pa Ali",
     ("indra", "purnama"): "Indro",
     ("indra",): "Indro",
+}
+
+USERNAME_TAG = {
+    "reyhanPp": "Reyhan",
+    "Benybenoy": "Benoy",
+    "NuAliAchay": "Pa Ali",
+    "bylinggha": "Bayu",
+    "Indrapurnama9080": "Indro",
+    "feri30watt": "Peri",
+}
+
+USERNAME_ANGGOTA = {
+    username.lower(): anggota
+    for username, anggota in USERNAME_TAG.items()
 }
 
 
@@ -104,15 +119,32 @@ def cocok_kata(kunci, nama):
     return len(nama) <= len(kunci) + 1
 
 
+def username_anggota(user):
+
+    if not user:
+        return None
+
+    nama = (user.get("username") or "").lstrip("@").lower()
+
+    return USERNAME_ANGGOTA.get(nama)
+
+
+def tag_anggota(nama):
+
+    for tampilan, anggota in USERNAME_TAG.items():
+
+        if anggota == nama:
+            return f"@{tampilan}"
+
+    return nama
+
+
 def nama_anggota_user(user):
 
     if not user:
         return None
 
     lengkap = kata_nama_user(user)
-
-    if not lengkap:
-        return None
 
     if lengkap in ALIAS_GRUP:
         return ALIAS_GRUP[lengkap]
@@ -129,7 +161,7 @@ def nama_anggota_user(user):
         if lengkap == kunci or cocok_kata(kunci, lengkap):
             return anggota
 
-    return None
+    return username_anggota(user)
 
 
 def rupiah(angka):
@@ -141,6 +173,29 @@ def rupiah(angka):
 def sekarang():
 
     return datetime.now(TIMEZONE)
+
+
+def teks_tanggal(saat=None):
+
+    nama_bulan = (
+        "",
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+    )
+
+    saat = saat or sekarang()
+
+    return f"{saat.day} {nama_bulan[saat.month]} {saat.year}"
 
 
 def bulan_berjalan(saat=None):
@@ -211,6 +266,7 @@ def menu(user_id=None):
         ],
         [tombol("⚠️ Tunggakan", "tunggakan")],
         [tombol("🔔 Pengingat", "ingatkan")],
+        [tombol("📣 Tagih", "tagih")],
     ]
 
     if user_id == RESET_OWNER_ID:

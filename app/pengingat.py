@@ -4,6 +4,7 @@ from app.rules import (
     PERIODE,
     bulan_berjalan,
     rupiah,
+    tag_anggota,
     tombol,
     papan,
 )
@@ -28,6 +29,15 @@ def teks_pengingat(bulan, belum):
         f"⚠️ PENGINGAT {bulan} {tahun}\n"
         f"Belum bayar: {', '.join(belum)}\n"
         f"{rupiah(IURAN)} / orang"
+    )
+
+
+def teks_tagih(belum, tanggal):
+
+    tag = " ".join(tag_anggota(nama) for nama in belum)
+
+    return (
+        f"{tag} bayar goblog ges tanggal {tanggal} can mayar keneh"
     )
 
 

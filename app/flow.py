@@ -1,6 +1,6 @@
 from contextvars import ContextVar
 
-from app.pengingat import skip_pengingat
+from app.pengingat import skip_pengingat, teks_tagih, yang_belum_bayar
 from app.qris import caption_qris, generate_qris
 from app.rules import (
     ADMIN_ID,
@@ -10,6 +10,7 @@ from app.rules import (
     BULAN,
     IURAN,
     TARGET,
+    bulan_berjalan,
     hitung_per_nama,
     menu,
     nama_anggota_user,
@@ -19,10 +20,12 @@ from app.rules import (
     PERINTAH_BOT,
     teks_mulai,
     teks_progress,
+    teks_tanggal,
     teks_transaksi,
     tombol,
     tombol_kembali,
     tombol_transaksi,
+    username_anggota,
 )
 
 
@@ -287,6 +290,47 @@ async def atur_pengingat(db, tg, message, lewat_tombol=False):
     await balas_layar(db, tg, message, teks)
 
 
+async def kirim_tagih(db, tg, message):
+
+    if not chat_grup(message):
+
+        await tampilkan(
+            tg,
+            message,
+            "Tagih dipakai di grup, supaya mention-nya masuk ke grup.",
+            menu_pengguna(),
+        )
+
+        return
+
+    bulan = bulan_berjalan()
+
+    if not bulan:
+
+        await tg.send_message(
+            message["chat"]["id"],
+            "Sekarang di luar periode iuran.",
+        )
+
+        return
+
+    belum = yang_belum_bayar(bulan, await db.semua_pembayaran())
+
+    if not belum:
+
+        await tg.send_message(
+            message["chat"]["id"],
+            f"✅ {bulan} sudah lunas semua.",
+        )
+
+        return
+
+    await tg.send_message(
+        message["chat"]["id"],
+        teks_tagih(belum, teks_tanggal()),
+    )
+
+
 async def handle_update(update, db, tg):
 
     if "callback_query" in update:
@@ -410,9 +454,13 @@ async def handle_callback(query, db, tg):
         return
 
     # Pa Ali boleh tandai lunas di QR orang lain di grup.
+    # Tagih boleh ditekan semua username anggota, meski menu orang lain.
     lewati_kunci_sesi = (
         data.startswith("lunas|")
         and user_id == MANUAL_LUNAS_ID
+    ) or (
+        data == "tagih"
+        and username_anggota(user)
     )
 
     # Di grup, tombol hanya melanjutkan sesi orang yang punya pesan itu.
@@ -473,6 +521,23 @@ async def handle_callback(query, db, tg):
             )
 
             return
+
+    if data == "tagih":
+
+        if not username_anggota(user):
+
+            await tg.answer(
+                query["id"],
+                "❌ Tagih hanya bisa dipakai anggota.",
+                show_alert=True,
+            )
+
+            return
+
+        await tg.answer(query["id"])
+        await kirim_tagih(db, tg, message)
+
+        return
 
     if not data.startswith("cekqr|"):
         await tg.answer(query["id"])
