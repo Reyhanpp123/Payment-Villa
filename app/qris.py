@@ -2,6 +2,7 @@ import base64
 
 import httpx
 
+from app.kurs import iuran_usd_anggota, nominal_bayar
 from app.rules import (
     IURAN,
     PERIODE,
@@ -42,10 +43,13 @@ async def generate_qris(db, nama, bulan, trxid=None):
 
 async def _buat_qris(db, nama, bulan, trxid):
 
+    nominal = await nominal_bayar(nama)
+
     payload = {
         "judul": f"Payment {nama} V360",
         "keterangan": f"{bulan} {PERIODE[bulan][0]}",
         "trxid": trxid,
+        "amount": nominal,
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -99,7 +103,29 @@ async def _buat_qris(db, nama, bulan, trxid):
         else (None, None)
     )
 
-    nominal = amount or IURAN
+    # Pakai nominal yang diminta bot. Untuk iuran USD, provider
+    # wajib mengembalikan amount yang sama supaya QR tidak Rp300rb.
+    if amount not in (None, "", 0, "0"):
+        try:
+            amount = int(amount)
+        except (TypeError, ValueError):
+            amount = None
+
+    if iuran_usd_anggota(nama):
+
+        if amount is not None and amount != nominal:
+            print(
+                "QRIS AMOUNT BEDA:",
+                {"diminta": nominal, "provider": amount, "nama": nama},
+            )
+            raise RuntimeError(
+                f"Nominal QRIS tidak sesuai. Diminta {nominal}, "
+                f"provider mengembalikan {amount}."
+            )
+
+    else:
+
+        nominal = amount or IURAN
 
     await db.simpan_pending(
         trxid,

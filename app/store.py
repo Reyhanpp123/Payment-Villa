@@ -1,6 +1,7 @@
 import httpx
 
-from app.rules import sekarang, trxid_acak
+from app.kurs import iuran_usd_anggota
+from app.rules import IURAN, sekarang, trxid_acak
 
 
 class Store:
@@ -193,13 +194,21 @@ class Store:
         # push ulang masih melihat PENDING dan tidak menulis kas dua kali.
         if not sudah:
 
+            # Progress dihitung per slot iuran Rp300.000.
+            # QR Peri bisa setara $300, tapi kas tetap 1 slot.
+            nominal_kas = (
+                IURAN
+                if iuran_usd_anggota(transaksi["nama"])
+                else transaksi["nominal"]
+            )
+
             response = await self.client.post(
                 f"{self.url}/rest/v1/pembayaran",
                 headers={"Prefer": "return=minimal"},
                 json={
                     "nama": transaksi["nama"],
                     "bulan": transaksi["bulan"],
-                    "nominal": transaksi["nominal"],
+                    "nominal": nominal_kas,
                 },
             )
 
