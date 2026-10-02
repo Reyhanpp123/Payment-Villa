@@ -43,14 +43,22 @@ async def generate_qris(db, nama, bulan, trxid=None):
 
 async def _buat_qris(db, nama, bulan, trxid):
 
+    # Provider menolak amount <= 300000 ("Nominal harus lebih dari 300K").
+    # Anggota biasa: jangan kirim amount, biar provider pakai default
+    # iuran V360 (Rp300.000) seperti sebelum ada field ini.
+    # Peri USD: kirim amount hasil kurs (jauh di atas 300K).
+
     nominal = await nominal_bayar(nama)
+    khusus_usd = iuran_usd_anggota(nama)
 
     payload = {
         "judul": f"Payment {nama} V360",
         "keterangan": f"{bulan} {PERIODE[bulan][0]}",
         "trxid": trxid,
-        "amount": nominal,
     }
+
+    if khusus_usd:
+        payload["amount"] = nominal
 
     async with httpx.AsyncClient(timeout=30) as client:
 
@@ -103,15 +111,13 @@ async def _buat_qris(db, nama, bulan, trxid):
         else (None, None)
     )
 
-    # Pakai nominal yang diminta bot. Untuk iuran USD, provider
-    # wajib mengembalikan amount yang sama supaya QR tidak Rp300rb.
     if amount not in (None, "", 0, "0"):
         try:
             amount = int(amount)
         except (TypeError, ValueError):
             amount = None
 
-    if iuran_usd_anggota(nama):
+    if khusus_usd:
 
         if amount is not None and amount != nominal:
             print(
