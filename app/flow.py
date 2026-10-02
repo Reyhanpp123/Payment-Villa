@@ -1,6 +1,13 @@
 from contextvars import ContextVar
+from datetime import datetime, timedelta
+import random
 
-from app.pengingat import skip_pengingat, teks_tagih, yang_belum_bayar
+from app.pengingat import (
+    skip_pengingat,
+    teks_spam_tagih,
+    teks_tagih,
+    yang_belum_bayar,
+)
 from app.qris import caption_qris, generate_qris
 from app.rules import (
     ADMIN_ID,
@@ -10,6 +17,10 @@ from app.rules import (
     BULAN,
     IURAN,
     TARGET,
+    TAGIH_COOLDOWN_DETIK,
+    TAGIH_SUSPEND_MAX_DETIK,
+    TAGIH_SUSPEND_MIN_DETIK,
+    TIMEZONE,
     bulan_berjalan,
     bulan_terbuka,
     hitung_per_nama,
@@ -17,6 +28,7 @@ from app.rules import (
     nama_anggota_user,
     papan,
     rupiah,
+    sekarang,
     teks_berhasil,
     PERINTAH_BOT,
     teks_mulai,
@@ -291,6 +303,98 @@ async def atur_pengingat(db, tg, message, lewat_tombol=False):
     await balas_layar(db, tg, message, teks)
 
 
+def _parse_waktu(nilai):
+
+    if not nilai:
+        return None
+
+    if isinstance(nilai, datetime):
+        saat = nilai
+    else:
+        teks = str(nilai).replace("Z", "+00:00")
+        saat = datetime.fromisoformat(teks)
+
+    if saat.tzinfo is None:
+        return saat.replace(tzinfo=TIMEZONE)
+
+    return saat.astimezone(TIMEZONE)
+
+
+async def cek_batas_tagih(db, tg, query, user):
+
+    # Cooldown 3 menit setelah tagih berhasil.
+    # Spam di dalam jendela itu: alert kasar 1x + suspend 1-2 menit.
+    # Klik lagi saat suspend: diam saja, tanpa alert berulang.
+
+    user_id = user.get("id")
+
+    if not user_id:
+        return False
+
+    batas = await db.get_tagih_batas(user_id)
+    sekarang_ini = sekarang()
+    nama = nama_anggota_user(user) or "sia"
+
+    suspended_until = _parse_waktu(
+        (batas or {}).get("suspended_until")
+    )
+
+    if suspended_until and suspended_until > sekarang_ini:
+
+        if not (batas or {}).get("alert_ditampilkan"):
+
+            await tg.answer(
+                query["id"],
+                teks_spam_tagih(nama),
+                show_alert=True,
+            )
+
+            await db.simpan_tagih_batas(
+                user_id,
+                last_tagih_at=(batas or {}).get("last_tagih_at"),
+                suspended_until=suspended_until.isoformat(),
+                alert_ditampilkan=True,
+            )
+
+        else:
+            await tg.answer(query["id"])
+
+        return False
+
+    last_tagih = _parse_waktu((batas or {}).get("last_tagih_at"))
+
+    if last_tagih:
+
+        jeda = (sekarang_ini - last_tagih).total_seconds()
+
+        if jeda < TAGIH_COOLDOWN_DETIK:
+
+            suspend_detik = random.randint(
+                TAGIH_SUSPEND_MIN_DETIK,
+                TAGIH_SUSPEND_MAX_DETIK,
+            )
+            suspended_until = sekarang_ini + timedelta(
+                seconds=suspend_detik
+            )
+
+            await db.simpan_tagih_batas(
+                user_id,
+                last_tagih_at=last_tagih.isoformat(),
+                suspended_until=suspended_until.isoformat(),
+                alert_ditampilkan=True,
+            )
+
+            await tg.answer(
+                query["id"],
+                teks_spam_tagih(nama),
+                show_alert=True,
+            )
+
+            return False
+
+    return True
+
+
 async def kirim_tagih(db, tg, message, user=None):
 
     if not chat_grup(message):
@@ -332,6 +436,16 @@ async def kirim_tagih(db, tg, message, user=None):
         message["chat"]["id"],
         teks_tagih(belum, teks_tanggal(), pengirim),
     )
+
+    user_id = (user or {}).get("id")
+
+    if user_id:
+        await db.simpan_tagih_batas(
+            user_id,
+            last_tagih_at=sekarang().isoformat(),
+            suspended_until=None,
+            alert_ditampilkan=False,
+        )
 
 
 async def handle_update(update, db, tg):
@@ -535,6 +649,9 @@ async def handle_callback(query, db, tg):
                 show_alert=True,
             )
 
+            return
+
+        if not await cek_batas_tagih(db, tg, query, user):
             return
 
         await tg.answer(query["id"])

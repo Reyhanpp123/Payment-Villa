@@ -346,6 +346,47 @@ class Store:
 
         self._raise(response, "pengingat")
 
+    async def get_tagih_batas(self, user_id):
+
+        baris = await self._get(
+            "tagih_batas",
+            {
+                "select": (
+                    "user_id,last_tagih_at,"
+                    "suspended_until,alert_ditampilkan"
+                ),
+                "user_id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+
+        return baris[0] if baris else None
+
+    async def simpan_tagih_batas(
+        self,
+        user_id,
+        last_tagih_at=None,
+        suspended_until=None,
+        alert_ditampilkan=False,
+    ):
+
+        response = await self.client.post(
+            f"{self.url}/rest/v1/tagih_batas",
+            params={"on_conflict": "user_id"},
+            headers={
+                "Prefer": "resolution=merge-duplicates,return=minimal",
+            },
+            json={
+                "user_id": user_id,
+                "last_tagih_at": last_tagih_at,
+                "suspended_until": suspended_until,
+                "alert_ditampilkan": alert_ditampilkan,
+                "updated_at": sekarang().isoformat(),
+            },
+        )
+
+        self._raise(response, "tagih_batas")
+
     async def hapus_semua(self):
 
         for tabel in ("pembayaran", "qris_transactions"):

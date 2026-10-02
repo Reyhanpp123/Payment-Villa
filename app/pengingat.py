@@ -57,6 +57,20 @@ def teks_tagih(belum, tanggal, pengirim):
     )
 
 
+KATA_SPAM_TAGIH = (
+    "Heh {nama}, spam wae goblog! Tunggu heula, kena suspend sakedap.",
+    "Sia mah belegug {nama}, pencet Tagih terus. Diam heula 1-2 menit!",
+    "Cicing atuh {nama}! Spam Tagih deui, otakna teu aya? Suspend heula.",
+    "{nama} goblog, ulah spam. Tagih teu bisa dipencet sakedap ieu.",
+    "Maneh {nama} lila teuing pencet. Tahan heula, kena suspend!",
+)
+
+
+def teks_spam_tagih(nama):
+
+    return random.choice(KATA_SPAM_TAGIH).format(nama=nama or "sia")
+
+
 def tombol_skip(bulan):
 
     return papan([[

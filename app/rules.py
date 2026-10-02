@@ -21,6 +21,11 @@ IURAN_USD_ANGGOTA = "Peri"
 IURAN_USD_NOMINAL = 300
 KURS_USD_URL = "https://open.er-api.com/v6/latest/USD"
 
+# Anti-spam tombol Tagih
+TAGIH_COOLDOWN_DETIK = 180  # 3 menit antar tagih
+TAGIH_SUSPEND_MIN_DETIK = 60
+TAGIH_SUSPEND_MAX_DETIK = 120
+
 ANGGOTA = [
     "Benoy",
     "Reyhan",
