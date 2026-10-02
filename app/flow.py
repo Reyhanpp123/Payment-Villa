@@ -333,7 +333,7 @@ async def kirim_marah_spam(tg, message, nama):
 
 async def cek_batas_tagih(db, tg, query, user):
 
-    # Cooldown 3 menit setelah tagih berhasil.
+    # Cooldown 3 menit setelah pesan Tagih ke grup (tagih atau pujian).
     # Spam di dalam jendela itu: pesan marah ke grup 1x + suspend 1-2 menit.
     # Klik lagi saat suspend: diam saja, tanpa pesan berulang.
 
@@ -401,6 +401,22 @@ async def cek_batas_tagih(db, tg, query, user):
     return True
 
 
+async def catat_klik_tagih(db, user):
+
+    # Setiap pesan Tagih ke grup (tagih atau pujian) ikut cooldown.
+    user_id = (user or {}).get("id")
+
+    if not user_id:
+        return
+
+    await db.simpan_tagih_batas(
+        user_id,
+        last_tagih_at=sekarang().isoformat(),
+        suspended_until=None,
+        alert_ditampilkan=False,
+    )
+
+
 async def kirim_tagih(db, tg, message, user=None):
 
     if not chat_grup(message):
@@ -433,6 +449,7 @@ async def kirim_tagih(db, tg, message, user=None):
             message["chat"]["id"],
             teks_puji_lunas(bulan),
         )
+        await catat_klik_tagih(db, user)
 
         return
 
@@ -442,16 +459,7 @@ async def kirim_tagih(db, tg, message, user=None):
         message["chat"]["id"],
         teks_tagih(belum, teks_tanggal(), pengirim),
     )
-
-    user_id = (user or {}).get("id")
-
-    if user_id:
-        await db.simpan_tagih_batas(
-            user_id,
-            last_tagih_at=sekarang().isoformat(),
-            suspended_until=None,
-            alert_ditampilkan=False,
-        )
+    await catat_klik_tagih(db, user)
 
 
 async def handle_update(update, db, tg):
