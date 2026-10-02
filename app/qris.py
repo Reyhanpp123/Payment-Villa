@@ -43,13 +43,11 @@ async def generate_qris(db, nama, bulan, trxid=None):
 
 async def _buat_qris(db, nama, bulan, trxid):
 
-    # Provider menolak amount <= 300000 ("Nominal harus lebih dari 300K").
-    # Anggota biasa: jangan kirim amount, biar provider pakai default
-    # iuran V360 (Rp300.000) seperti sebelum ada field ini.
-    # Peri USD: kirim amount hasil kurs (jauh di atas 300K).
+    # Peri USD: kirim amount hasil kurs.
+    # Anggota lain: tanpa field amount, provider pakai default iuran V360.
 
-    nominal = await nominal_bayar(nama)
     khusus_usd = iuran_usd_anggota(nama)
+    nominal = await nominal_bayar(nama)
 
     payload = {
         "judul": f"Payment {nama} V360",
