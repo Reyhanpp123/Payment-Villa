@@ -58,17 +58,35 @@ def teks_tagih(belum, tanggal, pengirim):
 
 
 KATA_SPAM_TAGIH = (
-    "Heh {nama}, spam wae goblog! Tunggu heula, kena suspend sakedap.",
-    "Sia mah belegug {nama}, pencet Tagih terus. Diam heula 1-2 menit!",
-    "Cicing atuh {nama}! Spam Tagih deui, otakna teu aya? Suspend heula.",
-    "{nama} goblog, ulah spam. Tagih teu bisa dipencet sakedap ieu.",
-    "Maneh {nama} lila teuing pencet. Tahan heula, kena suspend!",
+    "Heh {tag} goblog, spam terus. Tunggu heula lah, kena suspend sakedap.",
+    "{tag} belegug banget, pencet Tagih terus. Diam heula 1-2 menit!",
+    "Cicing atuh {tag}! Spam deui, otakna teu aya? Suspend heula.",
+    "Ih {tag} teu waras, ulah spam wae. Tagih teu bisa dipencet sakedap.",
+    "{tag} maneh lila teuing pencet. Tahan heula goblog, kena suspend!",
+    "Woy {tag}, spam Tagih deui? Suspen sakedap heula belegug.",
+    "{tag} goblog pisan, pencet terus. Eureun heula 1-2 menit!",
 )
 
 
 def teks_spam_tagih(nama):
 
-    return random.choice(KATA_SPAM_TAGIH).format(nama=nama or "sia")
+    return random.choice(KATA_SPAM_TAGIH).format(
+        tag=tag_anggota(nama) if nama else "sia",
+    )
+
+
+KATA_PUJI_LUNAS = (
+    "Mantap ges, {bulan} geus lunas kabeh. resep pisan!",
+    "Wah {bulan} beres kabeh, respect! Teu aya nu kudu ditagih.",
+    "Gas! {bulan} geus mayar kabeh, solid pisan.",
+    "Alhamdulillah {bulan} lunas kabeh. jago teuing!",
+    "Sip, {bulan} geus beres. eweuh tunggakan, mantap!",
+)
+
+
+def teks_puji_lunas(bulan):
+
+    return random.choice(KATA_PUJI_LUNAS).format(bulan=bulan)
 
 
 def tombol_skip(bulan):

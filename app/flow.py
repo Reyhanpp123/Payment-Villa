@@ -4,6 +4,7 @@ import random
 
 from app.pengingat import (
     skip_pengingat,
+    teks_puji_lunas,
     teks_spam_tagih,
     teks_tagih,
     yang_belum_bayar,
@@ -320,11 +321,21 @@ def _parse_waktu(nilai):
     return saat.astimezone(TIMEZONE)
 
 
+async def kirim_marah_spam(tg, message, nama):
+
+    chat_id = (message or {}).get("chat", {}).get("id")
+
+    if not chat_id:
+        return
+
+    await tg.send_message(chat_id, teks_spam_tagih(nama))
+
+
 async def cek_batas_tagih(db, tg, query, user):
 
     # Cooldown 3 menit setelah tagih berhasil.
-    # Spam di dalam jendela itu: alert kasar 1x + suspend 1-2 menit.
-    # Klik lagi saat suspend: diam saja, tanpa alert berulang.
+    # Spam di dalam jendela itu: pesan marah ke grup 1x + suspend 1-2 menit.
+    # Klik lagi saat suspend: diam saja, tanpa pesan berulang.
 
     user_id = user.get("id")
 
@@ -334,6 +345,7 @@ async def cek_batas_tagih(db, tg, query, user):
     batas = await db.get_tagih_batas(user_id)
     sekarang_ini = sekarang()
     nama = nama_anggota_user(user) or "sia"
+    message = query.get("message") or {}
 
     suspended_until = _parse_waktu(
         (batas or {}).get("suspended_until")
@@ -343,18 +355,15 @@ async def cek_batas_tagih(db, tg, query, user):
 
         if not (batas or {}).get("alert_ditampilkan"):
 
-            await tg.answer(
-                query["id"],
-                teks_spam_tagih(nama),
-                show_alert=True,
-            )
-
             await db.simpan_tagih_batas(
                 user_id,
                 last_tagih_at=(batas or {}).get("last_tagih_at"),
                 suspended_until=suspended_until.isoformat(),
                 alert_ditampilkan=True,
             )
+
+            await tg.answer(query["id"])
+            await kirim_marah_spam(tg, message, nama)
 
         else:
             await tg.answer(query["id"])
@@ -384,11 +393,8 @@ async def cek_batas_tagih(db, tg, query, user):
                 alert_ditampilkan=True,
             )
 
-            await tg.answer(
-                query["id"],
-                teks_spam_tagih(nama),
-                show_alert=True,
-            )
+            await tg.answer(query["id"])
+            await kirim_marah_spam(tg, message, nama)
 
             return False
 
@@ -425,7 +431,7 @@ async def kirim_tagih(db, tg, message, user=None):
 
         await tg.send_message(
             message["chat"]["id"],
-            f"✅ {bulan} sudah lunas semua.",
+            teks_puji_lunas(bulan),
         )
 
         return
