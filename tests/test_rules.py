@@ -1,20 +1,21 @@
+import re
 from datetime import datetime
 
 import pytest
 
+import app.rules as rules
 from app.flow import label_bulan, nama_target_bayar, teks_tunggakan
 from app.rules import (
     ANGGOTA,
     BULAN,
     TIMEZONE,
     TARGET,
-    buat_trxid,
     bulan_berjalan,
     hitung_per_nama,
     nama_anggota_user,
     rupiah,
     teks_progress,
-    trxid_selanjutnya,
+    trxid_acak,
 )
 
 
@@ -47,17 +48,27 @@ def test_nama_anggota_tanpa_user():
     assert nama_anggota_user({}) is None
 
 
-def test_trxid():
+def test_trxid_acak_anggota_biasa_dan_peri():
 
-    assert buat_trxid("Pa Ali", "November") == "202611PAALI"
-    assert buat_trxid("Benoy", "Januari") == "202701BENOY"
+    assert re.fullmatch(r"202611[0-9A-F]{8}", trxid_acak("November"))
+    assert re.fullmatch(
+        r"202701[0-9A-F]{8}", trxid_acak("Januari", nama="Benoy")
+    )
+    assert re.fullmatch(
+        r"202610PERI[0-9A-F]{6}", trxid_acak("Oktober", nama="Peri")
+    )
 
 
-def test_trxid_selanjutnya_melewati_yang_terpakai():
+def test_trxid_acak_melewati_yang_sudah_terpakai(monkeypatch):
 
-    assert trxid_selanjutnya("A", set()) == "A"
-    assert trxid_selanjutnya("A", {"A"}) == "A2"
-    assert trxid_selanjutnya("A", {"A", "A2"}) == "A3"
+    urutan = iter(["aaaaaaaa", "bbbbbbbb"])
+    monkeypatch.setattr(
+        rules.secrets, "token_hex", lambda n: next(urutan)
+    )
+
+    assert trxid_acak("Oktober", dipakai={"202610AAAAAAAA"}) == (
+        "202610BBBBBBBB"
+    )
 
 
 def test_rupiah():
