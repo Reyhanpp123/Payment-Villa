@@ -161,6 +161,41 @@ class Telegram:
 
         return hasil["result"]
 
+    async def send_animation(
+        self,
+        chat_id,
+        animasi,
+        caption=None,
+        reply_markup=None,
+        reply_to=None,
+    ):
+
+        data = {"chat_id": str(chat_id)}
+
+        if caption:
+            data["caption"] = caption
+
+        if reply_to:
+            data["reply_to_message_id"] = str(reply_to)
+
+        if reply_markup is not None:
+            data["reply_markup"] = json.dumps(reply_markup)
+
+        response = await self.client.post(
+            f"{self.base}/sendAnimation",
+            data=data,
+            files={"animation": ("lunas.gif", animasi, "image/gif")},
+        )
+
+        hasil = response.json()
+
+        if not hasil.get("ok"):
+            raise RuntimeError(
+                hasil.get("description", "Telegram gagal mengirim GIF")
+            )
+
+        return hasil["result"]
+
     async def copy_message(
         self,
         chat_id,

@@ -1,5 +1,6 @@
 import secrets
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 # ID Telegram Peri
@@ -20,6 +21,10 @@ IURAN_USD_USERNAME = "feri30watt"
 IURAN_USD_ANGGOTA = "Peri"
 IURAN_USD_NOMINAL = 300
 KURS_USD_URL = "https://open.er-api.com/v6/latest/USD"
+
+# GIF yang dikirim bersama pesan LUNAS, hanya untuk anggota ini.
+GIF_LUNAS_ANGGOTA = "Peri"
+GIF_LUNAS_PATH = Path(__file__).resolve().parent.parent / "payment-gateway.gif"
 
 # Anti-spam tombol Tagih
 TAGIH_COOLDOWN_DETIK = 180  # 3 menit antar tagih

@@ -16,6 +16,8 @@ from app.rules import (
     RESET_OWNER_ID,
     ANGGOTA,
     BULAN,
+    GIF_LUNAS_ANGGOTA,
+    GIF_LUNAS_PATH,
     IURAN,
     TARGET,
     TAGIH_COOLDOWN_DETIK,
@@ -124,6 +126,20 @@ async def hapus_qr_lama(tg, qr_lama):
     await tg.delete_message(chat_id, message_id)
 
 
+async def kirim_gif_lunas(tg, row, chat_id):
+
+    # Hanya untuk GIF_LUNAS_ANGGOTA. Hiasan saja: kalau gagal,
+    # pesan LUNAS tetap harus tampil, jadi error hanya dicatat.
+
+    if not row or row.get("nama") != GIF_LUNAS_ANGGOTA or not chat_id:
+        return
+
+    try:
+        await tg.send_animation(chat_id, GIF_LUNAS_PATH.read_bytes())
+    except Exception as e:
+        print("GAGAL KIRIM GIF LUNAS:", repr(e))
+
+
 async def pembayaran_selesai(db, tg, trxid, message=None, user_id=None):
 
     # QRIS dihapus, diganti pesan
@@ -164,6 +180,12 @@ async def pembayaran_selesai(db, tg, trxid, message=None, user_id=None):
                 "✅ QRIS ini sudah dibayar.",
                 {"inline_keyboard": []},
             )
+
+    await kirim_gif_lunas(
+        tg,
+        row,
+        chat_id or (message["chat"]["id"] if message else None),
+    )
 
     # Ditekan dari layar teks -> ganti layar itu
     if message and not foto:
