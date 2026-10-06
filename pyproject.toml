@@ -11,5 +11,11 @@ dependencies = [
     "tzdata==2025.2",
 ]
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]
+
 [tool.vercel]
 entrypoint = "app.main:app"

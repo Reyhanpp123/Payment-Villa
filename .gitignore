@@ -17,3 +17,4 @@ __pycache__/
 
 # Backup lama (pernah berisi token)
 BACKUP.TXT
+.coverage
