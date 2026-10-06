@@ -82,8 +82,36 @@ async def cron_pengingat(request: Request):
     return {"success": True, "msg": hasil}
 
 
+def asal_telegram_valid(request):
+
+    # Telegram mengirim secret_token dari setWebhook di header ini.
+    # Tanpa pengecekan, siapa pun bisa memalsukan from.id.
+    # Env belum diisi = masa transisi: tetap diterima, dengan peringatan.
+
+    rahasia = os.getenv("TELEGRAM_WEBHOOK_SECRET") or ""
+
+    if not rahasia:
+
+        print("PERINGATAN: TELEGRAM_WEBHOOK_SECRET belum diset")
+
+        return True
+
+    token = request.headers.get("x-telegram-bot-api-secret-token", "")
+
+    return secrets.compare_digest(
+        token.encode("utf-8"),
+        rahasia.encode("utf-8"),
+    )
+
+
 @app.post("/api/telegram")
 async def telegram(request: Request):
+
+    if not asal_telegram_valid(request):
+
+        print("TELEGRAM DITOLAK: secret token tidak cocok")
+
+        return JSONResponse({"ok": False}, status_code=401)
 
     try:
         update = await request.json()
